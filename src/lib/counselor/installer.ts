@@ -210,7 +210,7 @@ function Start-Claude($model, $effort) {
     Log ('Could not start Claude Code: ' + $_.Exception.Message)
     # It may have moved (reinstalled another way): look for it again. (A "claude" under WindowsApps
     # is Claude Desktop's shortcut, which would open the Desktop app.)
-    $found = Get-Command claude -All -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike '*\WindowsApps\*' } | Select-Object -First 1
+    $found = Get-Command claude -All -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike '*\WindowsApps\*' -and $_.Extension -match '^\.(exe|cmd|bat)$' } | Select-Object -First 1
     if (Test-Path (Join-Path $env:USERPROFILE '.local\bin\claude.exe')) { $Cfg.claude = Join-Path $env:USERPROFILE '.local\bin\claude.exe' }
     elseif ($found) { $Cfg.claude = $found.Source }
     if ($script:StartFails -ge 3) {
@@ -557,13 +557,14 @@ function Ask($text) { return $Shell.Popup($text, 0, 'Average App counselor', 1 +
 # or its own folder) is skipped: running it would open the Desktop app.
 function Find-Claude {
   $candidates = @(Join-Path $env:USERPROFILE '.local\bin\claude.exe')
-  $candidates += @(Get-Command claude -All -CommandType Application -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
+  $candidates += @(Get-Command claude -All -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Extension -match '^\.(exe|cmd|bat)$' } | ForEach-Object { $_.Source })
   $candidates += (Join-Path $env:APPDATA 'npm\claude.cmd')
   foreach ($c in $candidates) {
     if (-not $c -or -not (Test-Path $c) -or $c -like '*\WindowsApps\*' -or $c -like '*\AnthropicClaude\*') { continue }
+    # One that won't start (damaged, or blocked by antivirus) is passed over, and may be installed again.
     $ErrorActionPreference = 'Continue'
-    $v = & $c --version 2>&1 | Out-String
-    $ok = $LASTEXITCODE -eq 0 -and $v -match 'Claude Code'
+    $ok = $false
+    try { $v = & $c --version 2>&1 | Out-String; $ok = $LASTEXITCODE -eq 0 -and $v -match 'Claude Code' } catch { }
     $ErrorActionPreference = 'Stop'
     if ($ok) { return $c }
   }
@@ -641,10 +642,6 @@ try {
       exit 1
     }
   }
-  if ($signin.subscriptionType -eq 'free') {
-    Say ("Claude Code needs a Claude Pro or Max plan, and this Claude account is on the free plan." + $NL + $NL + "Upgrade at claude.ai (or sign in to Claude Code with another account), then double-click this file again.") 48
-    exit 1
-  }
 
   Write-Host 'Setting up your counselor...'
   __STOPPER__
@@ -675,24 +672,44 @@ __TURN_OFF__
   $session = ''
   if (Test-Path $SessionFile) { $session = ([IO.File]::ReadAllText($SessionFile)).Trim() }
   $common = @('--model', 'sonnet', '--effort', 'low', '--restricted', '--mcp-config', (Join-Path $Dir 'mcp.json'), '--strict-mcp-config', '--allowedTools', 'mcp__${MCP_SERVER}')
-  # Claude Code may write notices to stderr; they mustn't stop the setup.
-  $ErrorActionPreference = 'Continue'
-  $check = ''
-  $ok = $false
-  if ($session) {
-    $check = & $Claude -p '__CHECK__' --resume $session @common 2>&1 | Out-String
-    $ok = $LASTEXITCODE -eq 0
+  $script:check = ''
+  $script:ok = $false
+  function Run-Check {
+    # Claude Code may write notices to stderr; they mustn't stop the setup.
+    $ErrorActionPreference = 'Continue'
+    $script:ok = $false
+    if ($script:session) {
+      $script:check = & $Claude -p '__CHECK__' --resume $script:session @common 2>&1 | Out-String
+      $script:ok = $LASTEXITCODE -eq 0
+    }
+    if (-not $script:ok) {
+      $script:session = [guid]::NewGuid().ToString()
+      $script:check = & $Claude -p '__CHECK__' --session-id $script:session --name 'Average App counselor' @common 2>&1 | Out-String
+      $script:ok = $LASTEXITCODE -eq 0
+    }
+    $ErrorActionPreference = 'Stop'
   }
+  Run-Check
+  # A sign-in that has run out (Claude Code still counts it as signed in), or an account without a
+  # plan Claude Code takes: offer to sign in again, with this account or another, and check again.
   if (-not $ok) {
-    $session = [guid]::NewGuid().ToString()
-    $check = & $Claude -p '__CHECK__' --session-id $session --name 'Average App counselor' @common 2>&1 | Out-String
-    $ok = $LASTEXITCODE -eq 0
+    $signin = Get-SignIn $Claude
+    $noPlan = $signin -and $signin.authMethod -eq 'claude.ai' -and -not $signin.subscriptionType
+    if ($noPlan -or $check -match 'authenticat|/login|oauth|expired|revoked|401|subscription') {
+      if (Ask ("Claude Code couldn't use your Claude account: its sign-in may have run out, or the account may not have a Claude Pro or Max plan." + $NL + $NL + "Sign in again? Your browser opens: sign in (with another Claude account if you like), click Authorize, then come back to this window.")) {
+        Write-Host 'Opening your browser to sign in to Claude...'
+        $ErrorActionPreference = 'Continue'
+        & $Claude auth logout 2>&1 | Out-Null
+        & $Claude auth login --claudeai
+        $ErrorActionPreference = 'Stop'
+        Run-Check
+      }
+    }
   }
-  $ErrorActionPreference = 'Stop'
   if (-not $ok) {
     $why = $check.Trim()
     if ($why.Length -gt 600) { $why = $why.Substring(0, 600) + '...' }
-    Say ("Claude Code couldn't reach your desk:" + $NL + $NL + $why + $NL + $NL + "Double-click this file again to try once more. If it keeps happening, check your internet connection and that your Claude plan is Pro or Max.") 16
+    Say ("Claude Code couldn't reach your desk:" + $NL + $NL + $why + $NL + $NL + "Double-click this file again to try once more (it offers to sign in to Claude again if that's what is wrong). If it keeps happening, check your internet connection and that your Claude plan is Pro or Max.") 16
     exit 1
   }
   Save 'session.txt' $session

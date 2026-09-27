@@ -40,7 +40,12 @@ if (grep { $_ eq '--version' } @ARGV) { print "2.1.999 (Claude Code)\n"; exit 0 
 if (@ARGV >= 2 && $ARGV[0] eq 'project' && $ARGV[1] eq 'purge') { exit 0 }
 if (@ARGV >= 2 && $ARGV[0] eq 'auth') {
   my $flag = "$ENV{HOME}/.fake-claude-signed-in";
-  if ($ARGV[1] eq 'login') { open(my $f, '>', $flag); close $f; print "Login successful.\n"; exit 0 }
+  if ($ARGV[1] eq 'login') {
+    for my $p ($flag, "$ENV{HOME}/.fake-claude-fresh") { open(my $f, '>', $p); close $f }
+    print "Login successful.\n";
+    exit 0;
+  }
+  if ($ARGV[1] eq 'logout') { unlink $flag; exit 0 }
   my $in = !$ENV{FAKE_CLAUDE_SIGNED_OUT} || -e $flag;
   print $J->encode({ loggedIn => $in ? JSON::PP::true : JSON::PP::false, authMethod => $in ? 'claude.ai' : 'none', subscriptionType => $in ? 'pro' : undef }) . "\n";
   exit($in ? 0 : 1);
@@ -54,7 +59,14 @@ if ($session ne '') {
   open(my $f, '>>', "$d/$session.jsonl");
   close $f;
 }
-if (!grep { $_ eq 'stream-json' } @ARGV) { print "Testy's desk\n"; exit 0 }
+if (!grep { $_ eq 'stream-json' } @ARGV) {
+  if ($ENV{FAKE_CLAUDE_EXPIRED} && !-e "$ENV{HOME}/.fake-claude-fresh") {
+    print STDERR "Failed to authenticate: OAuth session expired and could not be refreshed\n";
+    exit 1;
+  }
+  print "Testy's desk\n";
+  exit 0;
+}
 $| = 1;
 my $model = $o{model} || 'sonnet';
 sub out { print $J->encode($_[0]) . "\n" }
@@ -93,6 +105,8 @@ class Desk {
   paused = false;
   remove = false;
   revoked = false;
+  /** The setup file's link is turned off (an older download). */
+  stale = false;
   events: Event[] = [];
   url = "";
   private server!: Server;
@@ -132,6 +146,7 @@ class Desk {
           return send(null);
         }
         if (path === `/api/counselor/${TOKEN}`) {
+          if (this.stale) return send({ message: "gone" }, 403);
           const out = this.requests.filter((r) => r.pending && r.taken).map((r) => ({ id: r.id, kind: "chat", text: r.text, model: r.model ?? "" }));
           this.events.push({ fetched: out.map((r) => r.id) });
           return send({ requests: out });
@@ -169,6 +184,22 @@ async function until(what: string, test: () => boolean, ms = 20_000) {
   }
 }
 
+/** Run the setup as a Mac would, without blocking the stand-in desk (which answers its link check). */
+function runSetup(file: string, env: NodeJS.ProcessEnv): Promise<{ status: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    const p = spawn("/bin/bash", [file], { env });
+    let stdout = "";
+    let stderr = "";
+    p.stdout!.setEncoding("utf8").on("data", (d: string) => (stdout += d));
+    p.stderr!.setEncoding("utf8").on("data", (d: string) => (stderr += d));
+    const kill = setTimeout(() => p.kill("SIGKILL"), 60_000);
+    p.on("close", (status) => {
+      clearTimeout(kill);
+      resolve({ status, stdout, stderr });
+    });
+  });
+}
+
 describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", () => {
   const desk = new Desk();
   let home = "";
@@ -191,7 +222,7 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
   function install() {
     const script = macInstaller({ site: desk.url, supabaseUrl: desk.url, supabaseKey: KEY, token: TOKEN });
     writeFileSync(join(home, "setup.command"), script);
-    return spawnSync("/bin/bash", [join(home, "setup.command")], { env, encoding: "utf8", timeout: 60_000 });
+    return runSetup(join(home, "setup.command"), env);
   }
   function startWatcher() {
     exited = null;
@@ -218,8 +249,8 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
     desk.stop();
   });
 
-  it("sets itself up: its folder, its settings, a checked conversation, and a LaunchAgent", () => {
-    const r = install();
+  it("sets itself up: its folder, its settings, a checked conversation, and a LaunchAgent", async () => {
+    const r = await install();
     expect(r.status, r.stdout + r.stderr).toBe(0);
     expect(r.stdout).toContain("Your counselor is on.");
     const config = JSON.parse(readFileSync(join(dir, "config.json"), "utf8")) as Record<string, string>;
@@ -298,7 +329,7 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
 
   it("turns itself off, keeping its files, when its link is revoked", async () => {
     desk.remove = false;
-    const r = install();
+    const r = await install();
     expect(r.status, r.stdout + r.stderr).toBe(0);
     startWatcher();
     await until("the watcher to check in", () => counselorLog().includes("started."));
@@ -316,7 +347,7 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
     if (spawnSync("/bin/launchctl", ["print", `gui/${uid}`]).status !== 0) return; // No login session to load it into.
     desk.revoked = false;
     rmSync(join(dir, "counselor.log"), { force: true });
-    const r = spawnSync("/bin/bash", [join(home, "setup.command")], { env: { ...env, AVERAGEAPP_TEST_LAUNCHD: "1" }, encoding: "utf8", timeout: 60_000 });
+    const r = await runSetup(join(home, "setup.command"), { ...env, AVERAGEAPP_TEST_LAUNCHD: "1" });
     try {
       expect(r.status, r.stdout + r.stderr).toBe(0);
       expect(spawnSync("/bin/launchctl", ["print", `gui/${uid}/${MAC_LABEL}`]).status).toBe(0);
@@ -334,7 +365,7 @@ describe.runIf(runs)("the Mac setup without Claude Code: it installs it and sign
   let env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
   const setup = (extra: Record<string, string>) => {
     writeFileSync(join(home, "setup.command"), macInstaller({ site: desk.url, supabaseUrl: desk.url, supabaseKey: KEY, token: TOKEN }));
-    return spawnSync("/bin/bash", [join(home, "setup.command")], { env: { ...env, ...extra }, encoding: "utf8", timeout: 60_000 });
+    return runSetup(join(home, "setup.command"), { ...env, ...extra });
   };
   const installed = () => join(home, ".local", "bin", "claude");
 
@@ -366,16 +397,26 @@ describe.runIf(runs)("the Mac setup without Claude Code: it installs it and sign
     desk.stop();
   });
 
-  it("asks before installing, and installs nothing when told not now", () => {
-    const r = setup({ AVERAGEAPP_TEST_ANSWER: "no" });
+  it("an older download whose link is turned off stops before installing anything", async () => {
+    desk.stale = true;
+    const r = await setup({ AVERAGEAPP_TEST_ANSWER: "yes" });
+    desk.stale = false;
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("its link has been turned off");
+    expect(r.stdout).not.toContain("Installing Claude Code");
+    expect(existsSync(installed())).toBe(false);
+  });
+
+  it("asks before installing, and installs nothing when told not now", async () => {
+    const r = await setup({ AVERAGEAPP_TEST_ANSWER: "no" });
     expect(r.status).toBe(1);
     expect(r.stdout).toContain("it is not on this Mac yet");
     expect(r.stdout).toContain("The counselor needs Claude Code.");
     expect(existsSync(installed())).toBe(false);
   });
 
-  it("installs Claude Code, has you sign in in the browser, then turns the counselor on", () => {
-    const r = setup({ AVERAGEAPP_TEST_ANSWER: "yes" });
+  it("installs Claude Code, has you sign in in the browser, then turns the counselor on", async () => {
+    const r = await setup({ AVERAGEAPP_TEST_ANSWER: "yes" });
     expect(r.status, r.stdout + r.stderr).toBe(0);
     expect(r.stdout).toContain("stand-in installer ran");
     expect(r.stdout).toContain("Opening your browser to sign in to Claude...");
@@ -389,10 +430,23 @@ describe.runIf(runs)("the Mac setup without Claude Code: it installs it and sign
     expect(config.claude).toBe(installed());
   });
 
-  it("signed in already, it goes straight through", () => {
-    const r = setup({ AVERAGEAPP_TEST_ANSWER: "no" });
+  it("signed in already, it goes straight through", async () => {
+    const r = await setup({ AVERAGEAPP_TEST_ANSWER: "no" });
     expect(r.status, r.stdout + r.stderr).toBe(0);
     expect(r.stdout).not.toContain("Opening your browser");
     expect(r.stdout).toContain("Your counselor is on.");
+  });
+
+  it("a sign-in that has run out: it offers to sign in again, then turns the counselor on", async () => {
+    rmSync(join(home, ".fake-claude-fresh"), { force: true });
+    const r = await setup({ AVERAGEAPP_TEST_ANSWER: "yes", FAKE_CLAUDE_EXPIRED: "1" });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).toContain("could not use your Claude account");
+    expect(r.stdout).toContain("Your counselor is on.");
+    const calls = readFileSync(claudeLog, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => (JSON.parse(l) as { argv?: string[] }).argv ?? []);
+    expect(calls).toContainEqual(["auth", "logout"]);
   });
 });

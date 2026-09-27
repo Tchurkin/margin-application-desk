@@ -703,10 +703,6 @@ if ! signed_in; then
     exit 1
   fi
 fi
-if "$CLAUDE" auth status --json 2>/dev/null | grep -q '"subscriptionType": *"free"'; then
-  say $'Claude Code needs a Claude Pro or Max plan, and this Claude account is on the free plan.\n\nUpgrade at claude.ai (or sign in to Claude Code with another account), then open this file again.' 2
-  exit 1
-fi
 
 # An older counselor stops first (an update replaces it). A test leaves the real one alone.
 if [ -z "$AVERAGEAPP_TEST" ] || [ -n "$AVERAGEAPP_TEST_LAUNCHD" ]; then
@@ -781,7 +777,7 @@ for v in ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL CLAUDE_CODE_O
   fi
 done
 # A test's stand-in Claude Code writes its log where it's told.
-if [ -n "$AVERAGEAPP_TEST" ]; then set -- "$@" "FAKE_CLAUDE_LOG=$FAKE_CLAUDE_LOG"; fi
+if [ -n "$AVERAGEAPP_TEST" ]; then set -- "$@" "FAKE_CLAUDE_LOG=$FAKE_CLAUDE_LOG" "FAKE_CLAUDE_EXPIRED=$FAKE_CLAUDE_EXPIRED"; fi
 
 # A first run checks that Claude Code is signed in and can reach the desk. An update keeps the
 # counselor's conversation (and so what it remembers); a new counselor starts one.
@@ -789,16 +785,35 @@ echo "Checking that Claude can reach your desk (this takes a few seconds)..."
 export PATH="$RUNPATH"
 SESSION=""
 [ -f session.txt ] && SESSION=$(cat session.txt)
-OK=0
-if [ -n "$SESSION" ]; then
-  CHECK=$(env -i "$@" "$CLAUDE" -p '__CHECK__' --resume "$SESSION" --model sonnet --effort low --restricted --mcp-config "$DIR/mcp.json" --strict-mcp-config --allowedTools 'mcp__${MCP_SERVER}' 2>&1 </dev/null) && OK=1
+# The check, with the settings passed to it (the same as launchd's).
+run_check() {
+  OK=0
+  if [ -n "$SESSION" ]; then
+    CHECK=$(env -i "$@" "$CLAUDE" -p '__CHECK__' --resume "$SESSION" --model sonnet --effort low --restricted --mcp-config "$DIR/mcp.json" --strict-mcp-config --allowedTools 'mcp__${MCP_SERVER}' 2>&1 </dev/null) && OK=1
+  fi
+  if [ "$OK" = 0 ]; then
+    SESSION=$( { /usr/bin/uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid; } | tr 'A-Z' 'a-z')
+    CHECK=$(env -i "$@" "$CLAUDE" -p '__CHECK__' --session-id "$SESSION" --name 'Average App counselor' --model sonnet --effort low --restricted --mcp-config "$DIR/mcp.json" --strict-mcp-config --allowedTools 'mcp__${MCP_SERVER}' 2>&1 </dev/null) && OK=1
+  fi
+}
+# Signed in to claude.ai, but no plan that Claude Code takes shows.
+no_plan() {
+  S=$("$CLAUDE" auth status --json 2>/dev/null)
+  printf '%s' "$S" | grep -q '"authMethod": *"claude.ai"' && ! printf '%s' "$S" | grep -Eq '"subscriptionType": *"[A-Za-z]'
+}
+run_check "$@"
+# A sign-in that has run out (Claude Code still counts it as signed in), or an account without a
+# plan Claude Code takes: offer to sign in again, with this account or another, and check again.
+if [ "$OK" = 0 ] && { printf '%s' "$CHECK" | grep -Eqi 'authenticat|/login|oauth|expired|revoked|401|subscription' || no_plan; }; then
+  if ask $'Claude Code could not use your Claude account: its sign-in may have run out, or the account may not have a Claude Pro or Max plan.\n\nSign in again? Your browser opens: sign in (with another Claude account if you like), click Authorize, then come back to this window.'; then
+    echo "Opening your browser to sign in to Claude..."
+    "$CLAUDE" auth logout >/dev/null 2>&1
+    "$CLAUDE" auth login --claudeai
+    run_check "$@"
+  fi
 fi
 if [ "$OK" = 0 ]; then
-  SESSION=$( { /usr/bin/uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid; } | tr 'A-Z' 'a-z')
-  CHECK=$(env -i "$@" "$CLAUDE" -p '__CHECK__' --session-id "$SESSION" --name 'Average App counselor' --model sonnet --effort low --restricted --mcp-config "$DIR/mcp.json" --strict-mcp-config --allowedTools 'mcp__${MCP_SERVER}' 2>&1 </dev/null) && OK=1
-fi
-if [ "$OK" = 0 ]; then
-  say "$(printf 'Claude Code could not reach your desk:\n\n%s\n\nIf it asks you to sign in, open Claude Code once and sign in, then open this file again.' "$(printf '%s' "$CHECK" | head -c 600)")" 0
+  say "$(printf 'Claude Code could not reach your desk:\n\n%s\n\nOpen this file again to try once more (it offers to sign in to Claude again if that is what is wrong). If it keeps happening, check your internet connection and that your Claude plan is Pro or Max.' "$(printf '%s' "$CHECK" | head -c 600)")" 0
   exit 1
 fi
 printf '%s' "$SESSION" > session.txt
