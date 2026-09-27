@@ -149,8 +149,8 @@ function CounselorCard({
         outdated && (
           <div className="rounded-md border border-accent bg-accent-soft px-3 py-2 text-sm" data-testid="counselor-update">
             <p className="mb-2">
-              A newer counselor is ready: it shows this computer&apos;s name here, and shares the questions with your counselor on
-              your other computers.
+              A newer counselor is ready: it answers questions from the people you share your desk with (until you update it,
+              they can&apos;t ask), and shows this computer&apos;s name here.
             </p>
             <button
               type="button"

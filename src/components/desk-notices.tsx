@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { subscribeDeskRequests } from "@/lib/bridge/live";
 import { noticeFor, onTab, showing, type Notice, type NoticeTab } from "@/lib/bridge/notices";
-import type { DeskRequest } from "@/lib/bridge/requests";
+import { ASKED_COLS, type DeskRequest } from "@/lib/bridge/requests";
 import { clearUnread, markUnread, subscribeUnread } from "@/lib/bridge/unread";
 import { supabaseBrowser } from "@/lib/supabase/client";
 
@@ -20,7 +20,7 @@ const POLL_MS = 10_000;
 const TABS: NoticeTab[] = ["Write", "Strategy", "Profile", "Counselor"];
 const DOT = "● ";
 
-type Seen = Pick<DeskRequest, "id" | "kind" | "status" | "piece_id" | "answered_by" | "answered_at">;
+type Seen = Pick<DeskRequest, "id" | "kind" | "status" | "piece_id" | "answered_by" | "answered_at" | "asked_by">;
 const SEEN_COLS = "id, kind, status, piece_id, answered_by, answered_at";
 const STEP: Record<Seen["status"], number> = { pending: 0, answered: 1, dismissed: 2 };
 
@@ -84,16 +84,20 @@ export function DeskNotices({ deskId }: { deskId: string }) {
     // What realtime missed: before it connected, while it was down, while the tab slept. The first
     // read only learns what's there, so a reload doesn't announce answers again.
     const catchUp = async () => {
-      const { data } = await supabase
-        .from("desk_requests")
-        .select(SEEN_COLS)
-        .eq("desk_id", deskId)
-        .in("status", ["pending", "answered"])
-        .order("answered_at", { ascending: false, nullsFirst: true })
-        .limit(50);
+      const query = (cols: string) =>
+        supabase
+          .from("desk_requests")
+          .select(cols)
+          .eq("desk_id", deskId)
+          .in("status", ["pending", "answered"])
+          .order("answered_at", { ascending: false, nullsFirst: true })
+          .limit(50);
+      let { data, error } = await query(SEEN_COLS + ASKED_COLS);
+      // A database from before the shared chat (migration 20261019).
+      if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await query(SEEN_COLS));
       const loud = seeded;
       seeded = true;
-      for (const r of (data ?? []) as Seen[]) consider(r, loud);
+      for (const r of (data ?? []) as unknown as Seen[]) consider(r, loud);
     };
 
     const stop = subscribeDeskRequests(supabase, deskId, {

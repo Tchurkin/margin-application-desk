@@ -1,3 +1,4 @@
+import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { addCollege, addPiece, apiClient, essay, expectEssay, expectEssayContains, signUp, suggestLog, waitSaved } from "./helpers";
 
@@ -250,10 +251,17 @@ test("people the desk is shared with see the essay's Ask chat, and ask in it whi
   await page.goto("/desk/settings/connectors");
   await page.getByLabel("Assistant").selectOption("Claude");
   await page.getByRole("button", { name: "Make a connector link" }).click();
-  const token = (await page.getByRole("textbox", { name: "Connector link" }).inputValue()).split("/api/mcp/")[1];
+  const link = await page.getByRole("textbox", { name: "Connector link" }).inputValue();
+  const token = link.split("/api/mcp/")[1];
   const api = apiClient();
+  // Something only the student's profile holds, which a guest's question must never carry.
+  const client = new Client({ name: "e2e", version: "1.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(link)));
+  const saved = (await client.callTool({ name: "update_my_profile", arguments: { about: "Testy's private note: SECRET-ABOUT-TESTY" } })) as { isError?: boolean };
+  expect(saved.isError).toBeFalsy();
+  await client.close();
   const checkIn = async () => {
-    const { data, error } = await api.rpc("connector_counselor_poll", { token, version: "4", computer: "TESTY-PC", machine: "e2e-askshare" });
+    const { data, error } = await api.rpc("connector_counselor_poll", { token, version: "5", computer: "TESTY-PC", machine: "e2e-askshare" });
     if (error) throw new Error(error.message);
     return data as { fresh: number };
   };
@@ -275,11 +283,13 @@ test("people the desk is shared with see the essay's Ask chat, and ask in it whi
   await expect(panel.getByTestId("request")).toHaveCount(1);
   await expect(panel.getByTestId("asked-by")).toContainText("Mom Testy");
 
-  // The counselor takes it, is told who asked, and answers; both of them see it.
+  // The counselor takes it, is told who asked, and answers it on its own from just the essay; both of them see it.
   await expect.poll(async () => (await checkIn()).fresh).toBe(1);
-  const work = (await (await request.get(`/api/counselor/${token}`)).json()) as { requests: { id: string; text: string }[] };
-  expect(work.requests[0].text).toContain("Question from Mom Testy");
-  expect(work.requests[0].text).toContain("change nothing on the desk for them");
+  const work = (await (await request.get(`/api/counselor/${token}`)).json()) as { requests: { id: string; text: string; guest?: boolean }[] };
+  expect(work.requests[0].guest).toBe(true);
+  expect(work.requests[0].text).toContain("Mom Testy, someone the student shares their desk with");
+  expect(work.requests[0].text).toContain("My essay about robots.");
+  expect(work.requests[0].text).not.toContain("SECRET-ABOUT-TESTY");
   expect((await api.rpc("connector_finish_request", { token, request: work.requests[0].id, answer_text: "It lands, but add one more beat." })).data).toBe(true);
   await expect(panel).toContainText("It lands, but add one more beat.");
   await page.goto(pieceUrl);

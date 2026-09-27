@@ -198,7 +198,10 @@ test.describe("on a Mac", () => {
     expect(url).toContain(token);
     expect(await counselorApi(token).poll()).toMatchObject({ fresh: 0, paused: false, remove: false });
     // A made-up link gets a plain message, not a setup.
-    expect((await request.get(url.replace(token, "not a token"))).status()).toBe(404);
+    // A bad line says so in Terminal (curl -f would drop an error's text).
+    const bad = await request.get(url.replace(token, "not a token"));
+    expect(bad.status()).toBe(200);
+    expect(await bad.text()).toContain("This setup line is not valid");
   });
 });
 

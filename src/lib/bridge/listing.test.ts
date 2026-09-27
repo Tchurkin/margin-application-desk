@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { LIST_MAX, MESSAGE_MAX, PASSAGE_MAX, renderRequest, renderRequestList, type PendingRequest } from "./listing";
+import { LIST_MAX, MESSAGE_MAX, PASSAGE_MAX, renderGuestQuestion, renderRequest, renderRequestList, type PendingRequest } from "./listing";
 
 const PIECE = "11111111-1111-4111-8111-111111111111";
 
@@ -128,9 +128,23 @@ describe("a question from someone the desk is shared with", () => {
     expect(t).toContain("change nothing on the desk for them");
   });
 
-  it("reads as the student's own when nobody else asked", () => {
+  it("reads as the student's own when nobody else asked, with a word that the people they share with may read the answer", () => {
     const t = renderRequest(row("s1", { asked_by: "" }));
     expect(t).toContain("Question:");
-    expect(t).not.toContain("shares their desk");
+    expect(t).not.toContain("Question from");
+    expect(t).toContain("may read this answer: keep private details from the profile");
+  });
+
+  it("goes to the counselor on its own, with the essay and nothing to call", () => {
+    const t = renderGuestQuestion(row("g1", { asked_by: "Mom Testy", prompt: "Is the ending too abrupt?" }), "# Why Northfield?\nThe essay itself.");
+    expect(t).toContain('Mom Testy, someone the student shares their desk with (a parent or mentor), asks about "Why Northfield?":');
+    expect(t).toContain("Is the ending too abrupt?");
+    expect(t).toContain("The essay itself.");
+    expect(t).toContain("doesn't allow AI help with drafting");
+    for (const call of ["answer_request", "read_piece", "read_profile", "request_id"]) expect(t).not.toContain(call);
+  });
+
+  it("says so when the essay couldn't be loaded", () => {
+    expect(renderGuestQuestion(row("g2", { asked_by: "Mom Testy" }), null)).toContain("say you can't see it right now");
   });
 });

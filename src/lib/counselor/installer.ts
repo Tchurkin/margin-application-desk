@@ -234,6 +234,82 @@ function Start-Claude($model, $effort) {
   }
 }
 
+# A question from someone the student shares their desk with: answered on its own, in a separate
+# Claude Code run with no tools, no desk and nothing of the conversation, from just the essay.
+$script:Alone = $null
+# It runs outside this folder, with no CLAUDE.md (this folder's brief is for the student's
+# counselor; the student's own may hold anything) and none of the student's hooks.
+function Start-Alone($item, $model, $effort) {
+  $d = Join-Path ([IO.Path]::GetTempPath()) 'AverageApp-question'
+  $p = $null
+  try {
+    if (-not (Test-Path $d)) { $null = New-Item -ItemType Directory -Force $d }
+    $settings = Join-Path $d 'settings.json'
+    [IO.File]::WriteAllText($settings, '{"disableAllHooks":true}')
+    $psi = New-Object System.Diagnostics.ProcessStartInfo
+    $psi.FileName = $Cfg.claude
+    $psi.Arguments = (@('-p', '--model', $model, '--effort', $effort, '--tools', '""', '--strict-mcp-config', '--no-session-persistence', '--settings', (Quote $settings), '--output-format', 'text') -join ' ')
+    $psi.WorkingDirectory = $d
+    $psi.EnvironmentVariables['CLAUDE_CODE_DISABLE_CLAUDE_MDS'] = '1'
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.StandardOutputEncoding = New-Object System.Text.UTF8Encoding($false)
+    $psi.StandardErrorEncoding = New-Object System.Text.UTF8Encoding($false)
+    $p = [Diagnostics.Process]::Start($psi)
+    $out = $p.StandardOutput.ReadToEndAsync()
+    $err = $p.StandardError.ReadToEndAsync()
+    $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes([string]$item.text)
+    $p.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+    $p.StandardInput.Close()
+    $script:Alone = @{ id = $item.id; proc = $p; out = $out; err = $err; started = Get-Date }
+    Activity 'thinking' $item.id
+  } catch {
+    Log ('Could not start Claude Code for a question: ' + $_.Exception.Message)
+    if ($p) { try { & taskkill.exe /PID $p.Id /T /F 2>&1 | Out-Null } catch {} }
+    Finish $item.id "Sorry, I couldn't answer this one right now. Try asking again in a little while."
+    Activity 'idle'
+  }
+}
+
+function Stop-Alone {
+  $a = $script:Alone
+  $script:Alone = $null
+  if (-not $a) { return }
+  try { if (-not $a.proc.HasExited) { & taskkill.exe /PID $a.proc.Id /T /F 2>&1 | Out-Null } } catch {}
+}
+
+function Check-Alone {
+  $a = $script:Alone
+  if (-not $a.proc.HasExited) {
+    if (((Get-Date) - $a.started).TotalSeconds -gt 100) {
+      Log 'A question took over 100 seconds; stopping it.'
+      Stop-Alone
+      Finish $a.id 'Sorry, that took too long and I stopped. Try asking again.'
+      Activity 'idle'
+    }
+    return
+  }
+  $script:Alone = $null
+  $text = ''
+  $why = ''
+  # Only once the reads are done (.Result would wait for ever on a pipe something else holds open).
+  try { if ($a.out.Wait(5000)) { $text = ([string]$a.out.Result).Trim() } } catch {}
+  try { if ($a.err.Wait(1000)) { $why = ([string]$a.err.Result).Trim() } } catch {}
+  $code = -1
+  try { $code = $a.proc.ExitCode } catch {}
+  if ($code -ne 0 -or -not $text) {
+    $said = ($why + ' ' + $text).Trim()
+    Log ('Claude could not answer a question (' + $code + '): ' + $said.Substring(0, [Math]::Min(300, $said.Length)))
+    $text = "Sorry, I couldn't answer this one right now. Try asking again in a little while."
+  }
+  Finish $a.id $text
+  Activity 'idle'
+  Log ('Answered a question in ' + [int]((Get-Date) - $a.started).TotalSeconds + 's.')
+}
+
 function Stop-Claude($gently) {
   $p = $script:Proc
   if (-not $p) { return }
@@ -379,12 +455,13 @@ function Fetch-Work {
     foreach ($x in @($script:Queue)) { $busy[[string]$x.id] = $true }
     foreach ($x in @($script:Unposted)) { $busy[[string]$x.id] = $true }
     if ($script:Current) { $busy[[string]$script:Current.id] = $true }
+    if ($script:Alone) { $busy[[string]$script:Alone.id] = $true }
     foreach ($q in $r.requests) {
       if ($busy.ContainsKey([string]$q.id)) { continue }
       $busy[[string]$q.id] = $true
       $m = [string]$q.model
       if ($Models -notcontains $m) { $m = '' }
-      [void]$script:Queue.Add(@{ id = $q.id; text = [string]$q.text; model = $m; tries = 0; at = Get-Date })
+      [void]$script:Queue.Add(@{ id = $q.id; text = [string]$q.text; model = $m; tries = 0; at = Get-Date; guest = [bool]$q.guest })
     }
     $script:NeedFetch = $false
     $script:FetchFails = 0
@@ -427,6 +504,9 @@ function Remove-Counselor {
   $script:Current = $null
   Stop-Claude $false
   if ($c) { Finish $c.id 'Your counselor was removed from your computer before it could answer this.' }
+  $a = $script:Alone
+  Stop-Alone
+  if ($a) { Finish $a.id 'Your counselor was removed from your computer before it could answer this.' }
   ${REMOVE_STARTUP}
   $session = ''
   if (Test-Path $SessionFile) { $session = ([IO.File]::ReadAllText($SessionFile)).Trim() }
@@ -488,9 +568,15 @@ while ($true) {
           Stop-Claude $false
           Activity 'idle'
         }
+        $a = $script:Alone
+        if ($a -and $a.started -lt $now -and -not $open.ContainsKey([string]$a.id)) {
+          Log 'Stopped a question that was withdrawn or went to another computer.'
+          Stop-Alone
+          Activity 'idle'
+        }
       }
       # Something is waiting that nothing here is working on: look again now and then.
-      if ($Waiting -gt 0 -and -not $script:Current -and $script:Queue.Count -eq 0 -and ($now - $script:LastFetch).TotalSeconds -gt 60) { $script:NeedFetch = $true }
+      if ($Waiting -gt 0 -and -not $script:Current -and -not $script:Alone -and $script:Queue.Count -eq 0 -and ($now - $script:LastFetch).TotalSeconds -gt 60) { $script:NeedFetch = $true }
     } catch {
       $detail = ''
       if ($_.ErrorDetails) { $detail = $_.ErrorDetails.Message }
@@ -504,6 +590,7 @@ while ($true) {
       if ($detail -like '*not valid*') {
         Log 'Its connector link was revoked, so the counselor is turning itself off.'
         Stop-Claude $false
+        Stop-Alone
         ${REMOVE_STARTUP}
         exit
       }
@@ -518,6 +605,7 @@ while ($true) {
     Post-Draft
     if ($script:Proc -and ($script:Proc.HasExited -or -not $script:Out)) { Handle-Exit }
   }
+  if ($script:Alone) { Check-Alone }
   if ($script:Current -and ((Get-Date) - $script:Current.started).TotalMinutes -gt 15) {
     Log 'A request took over 15 minutes; stopping it.'
     $c = $script:Current
@@ -537,10 +625,16 @@ while ($true) {
     Stop-Claude $false
   }
 
-  if (-not $script:Current -and -not $script:Switching) {
+  if (-not $script:Current -and -not $script:Switching -and -not $script:Alone) {
     # A new effort takes effect between requests (a new model switches in place, below).
     if ($script:Proc -and $script:ProcEffort -ne $Effort) { Stop-Claude $true }
-    if (-not $Paused -and $script:Queue.Count -gt 0) {
+    if (-not $Paused -and $script:Queue.Count -gt 0 -and $script:Queue[0].guest) {
+      $item = $script:Queue[0]
+      $script:Queue.RemoveAt(0)
+      $want = $item.model
+      if (-not $want) { $want = $Model }
+      Start-Alone $item $want $Effort
+    } elseif (-not $Paused -and $script:Queue.Count -gt 0) {
       $want = $script:Queue[0].model
       if (-not $want) { $want = $Model }
       if (-not $script:Proc -and (Get-Date) -ge $script:NextStart) { Start-Claude $want $Effort }
@@ -553,7 +647,7 @@ while ($true) {
       Log 'Claude Code is resting.'
     }
   }
-  if ($script:Current) { Start-Sleep -Milliseconds 150 } else { Start-Sleep -Milliseconds 400 }
+  if ($script:Current -or $script:Alone) { Start-Sleep -Milliseconds 150 } else { Start-Sleep -Milliseconds 400 }
 }
 `;
 

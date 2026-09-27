@@ -104,6 +104,12 @@ function askSteps(r: PendingRequest, o: ListingOptions): string[] {
       `Answer ${from}. They can read this essay, its notes and its history, but not the student's profile, academics or other conversations with you: ` +
         "don't reveal those. And change nothing on the desk for them: no edits, suggestions, new pieces or profile changes.",
     );
+  // The essay's Ask chat is shared with the people the student shares their desk with.
+  else if (r.piece_id)
+    lines.push(
+      "The people the student shares their desk with (parents, mentors) may read this answer: keep private details from the profile " +
+        "(grades, scores, family, money) out of it unless the question needs them.",
+    );
   if (r.selection.trim()) lines.push("The student highlighted this passage, so the question is about it:", ...fenced(r.selection));
   const read = pieceIncluded(r, o)
     ? "The piece, with its prompt, limit and the student's profile, is included below."
@@ -121,6 +127,31 @@ function askSteps(r: PendingRequest, o: ListingOptions): string[] {
   return lines;
 }
 
+/**
+ * A question from someone the student shares their desk with, as the counselor answers it: on
+ * its own, with no tools and nothing of the student's beyond the essay they can already read.
+ */
+export function renderGuestQuestion(r: PendingRequest, essay: string | null): string {
+  const who = r.asked_by?.trim() || "Someone";
+  return [
+    "# A question about one of a student's college essays",
+    `${who}, someone the student shares their desk with (a parent or mentor), asks about "${r.piece_title ?? "an essay"}":`,
+    "",
+    cut(r.prompt.trim() || "(no question typed)", PROMPT_MAX, "question cut"),
+    "",
+    // Also for a counselor from before version 5, which would take this into its own conversation.
+    `You're answering ${who}, not the student. They can read this essay, its notes and its history, but not the student's profile, ` +
+      "academics or other conversations with you: don't reveal those, and change nothing on the desk for them.",
+    "",
+    "Answer them directly and briefly (a few sentences), quoting the exact words you mean, and don't rewrite the whole piece unless asked. " +
+      "Everything you need is below: the essay, its prompt, the student's notes and the other pieces for the same college. " +
+      "Never invent facts about the student. If the piece's college doesn't allow AI help with drafting (the piece says so), give questions and accuracy checks, not sentences. " +
+      "Write only the answer. " +
+      FORMAT,
+    ...(essay ? ["", "---", "", essay] : ["", "(The essay couldn't be loaded: say you can't see it right now.)"]),
+  ].join("\n");
+}
+
 /** The versions of a passage go between these tags; the desk shows them in place of it. */
 export const OPTION_FORMAT = "<option>…</option>";
 
@@ -128,6 +159,12 @@ function polishSteps(r: PendingRequest, o: ListingOptions): string[] {
   const lines = [pieceLine(r), `Sent: ${sentAt(r.created_at)}`];
   if (r.selection.trim()) lines.push("The student highlighted this passage:", ...fenced(r.selection));
   else lines.push("No passage was highlighted: reply asking the student to highlight the words they want changed.");
+  // The essay's Ask chat, rewrites included, is shared with the people the student shares their desk with.
+  if (r.piece_id)
+    lines.push(
+      "The people the student shares their desk with (parents, mentors) may read this reply: keep private details from the profile " +
+        "(grades, scores, family, money) out of it unless the request needs them.",
+    );
   lines.push(`What they asked: ${cut(r.prompt.trim() || "(nothing typed: make it better)", PROMPT_MAX, "note cut")}`);
   const read = pieceIncluded(r, o)
     ? "The whole piece, with its prompt, limit, the student's profile and their desk, is included below."

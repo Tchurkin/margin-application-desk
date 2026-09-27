@@ -359,7 +359,7 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
         </p>
         <p className="mt-1.5 text-xs text-muted">
           Your question waits on your desk; your counselor (or a {label} chat watching your desk) answers it through your
-          connector, and the answer shows up here.
+          connector, and the answer shows up here. People you share your desk with can read this chat too.
         </p>
       </div>
 

@@ -22,7 +22,11 @@ const quote = (s: string) => `“${s.length > 40 ? `${s.slice(0, 39)}…` : s}�
  * The note for a request that was just answered, or null when the student is already looking at
  * where it shows (then the answer appears in front of them).
  */
-export function noticeFor(r: Pick<DeskRequest, "id" | "kind" | "piece_id" | "answered_by">, path: string, pieceTitle?: string | null): Notice | null {
+export function noticeFor(
+  r: Pick<DeskRequest, "id" | "kind" | "piece_id" | "answered_by" | "asked_by">,
+  path: string,
+  pieceTitle?: string | null,
+): Notice | null {
   const who = r.answered_by || "Claude";
   const on = (href: string) => path === href || path.startsWith(`${href}/`);
   switch (r.kind) {
@@ -36,7 +40,11 @@ export function noticeFor(r: Pick<DeskRequest, "id" | "kind" | "piece_id" | "ans
         id: r.id,
         tab: "Write",
         href,
-        text: r.kind === "polish" ? `${who}'s rewrites${what} are ready.` : `${who} answered your question${what}.`,
+        text:
+          r.kind === "polish"
+            ? `${who}'s rewrites${what} are ready.`
+            : // A question from someone the desk is shared with, in the essay's shared chat.
+              `${who} answered ${r.asked_by?.trim() ? `${r.asked_by.trim()}'s` : "your"} question${what}.`,
       };
     }
     case "odds":

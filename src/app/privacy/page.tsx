@@ -9,7 +9,7 @@ export const metadata = { title: "Privacy" };
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy" updated="September 25, 2026">
+    <LegalPage title="Privacy" updated="September 27, 2026">
       <p>
         Average App is a free, open-source place for high school students to write their college essays and keep track of their
         applications. The essays on it are mostly written by minors, so it collects as little as it can, sells nothing, and lets you
@@ -62,8 +62,11 @@ export default function PrivacyPage() {
           you give a link. They can read your colleges (with the odds and notes on them, and the reasoning behind the odds,
           which can mention your grades and scores), your essays, their notes and history, suggestions and your recommenders. Depending on what you choose, they can also suggest edits or make them. They
           can&apos;t see your profile, your academics or your conversations with your counselor, except the Ask chat on each essay:
-          they can read it, and ask in it if they can suggest or edit, while your counselor is on (it answers them on your Claude
-          plan, and changes nothing for them). You can remove anyone, and
+          they can read the questions asked there and the answers (your own too, including ones from before you shared your
+          desk; answers may draw on your profile), and ask in it if they can suggest or edit, while your counselor is on. The
+          counselor answers them on your Claude plan from only what they can already read on your desk, apart from your
+          conversation with it, and changes nothing for them. Only what you asked before September 27, 2026, when the chat
+          became shared, stays yours. You can remove anyone, and
           turning sharing off (or a link) cuts off everyone who came in that way, at once.
         </li>
         <li>An AI assistant, but only one you connect yourself (below).</li>

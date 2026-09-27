@@ -1,6 +1,6 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { head, renderRequest, renderRequestList, type ListingOptions, type PendingRequest } from "@/lib/bridge/listing";
+import { head, renderGuestQuestion, renderRequest, renderRequestList, type ListingOptions, type PendingRequest } from "@/lib/bridge/listing";
 import type { RequestKind } from "@/lib/bridge/requests";
 import { profileInContext, type ProfileInfo } from "@/lib/profile/render";
 import { catalogCandidates, matchCollege } from "@/lib/strategy/catalog";
@@ -63,6 +63,17 @@ class Context {
       this.pieces.set(id, p);
     }
     return p;
+  }
+
+  /** The piece alone, as someone the student shares their desk with can read it: nothing from the profile. */
+  async pieceForGuest(id: string): Promise<string | null> {
+    try {
+      const { p: info, doc, flat } = await loadPiece(this.sb, this.token, id);
+      doc.destroy();
+      return clip(renderPiece({ ...info, student: info.student ? { ...info.student, about: "" } : info.student }, flat.text));
+    } catch {
+      return null;
+    }
   }
 
   strategyText(): Promise<string | null> {
@@ -128,15 +139,23 @@ export const PROFILE_RULE =
   "The student's profile (read_profile) is the ground truth about them: where a draft, a note or what you remember disagrees with it, " +
   "the profile wins, above all any section of facts they ask you to get right.";
 
-/** One message per request for the counselor, each with its context. */
+/**
+ * One message per request for the counselor, each with its context. A question from someone the
+ * student shares their desk with is marked `guest`: the counselor answers it on its own, apart
+ * from its conversation and with no tools, from just the essay.
+ */
 export async function counselorMessages(
   sb: SupabaseClient,
   token: string,
   rows: PendingRequest[],
-): Promise<{ id: string; kind: RequestKind; text: string; model: string }[]> {
+): Promise<{ id: string; kind: RequestKind; text: string; model: string; guest?: boolean }[]> {
   const ctx = new Context(sb, token);
   return Promise.all(
     rows.map(async (r) => {
+      if (r.asked_by?.trim()) {
+        const essay = r.piece_id ? await ctx.pieceForGuest(r.piece_id) : null;
+        return { id: r.id, kind: r.kind, model: r.model ?? "", guest: true, text: renderGuestQuestion(r, essay) };
+      }
       const c = await ctx.forRequest(r);
       const body = renderRequest(r, { answer: "reply", included: includedFrom(c ? [c.key] : []) });
       return {

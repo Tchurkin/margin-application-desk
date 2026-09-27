@@ -42,7 +42,7 @@ use Fcntl qw(:flock);
 use Time::HiRes qw(time sleep);
 use File::Basename qw(dirname);
 use File::Glob qw(bsd_glob);
-use File::Path qw(remove_tree);
+use File::Path qw(remove_tree make_path);
 use Cwd qw(abs_path);
 use Symbol qw(gensym);
 
@@ -253,6 +253,84 @@ sub start_claude {
   Log("Claude Code is up ($model, $effort effort).");
 }
 
+# A question from someone the student shares their desk with: answered on its own, in a separate
+# Claude Code run with no tools, no desk and nothing of the conversation, from just the essay. It
+# runs outside this folder, with no CLAUDE.md (this folder's brief is for the student's counselor;
+# the student's own may hold anything) and none of the student's hooks.
+my $Alone;
+my $AloneDir = "$Dir/alone";
+sub alone_files { return map { "$AloneDir/$_" } qw(question.txt answer.txt error.txt) }
+sub start_alone {
+  my ($item, $model, $effort) = @_;
+  make_path($AloneDir) unless -d $AloneDir;
+  my $q = $item->{text};
+  utf8::encode($q);
+  unlink alone_files();
+  spit("$AloneDir/question.txt", $q);
+  spit("$AloneDir/settings.json", '{"disableAllHooks":true}');
+  my $pid = fork();
+  if (!defined $pid) {
+    Log("Could not start Claude Code for a question: $!");
+    unlink alone_files();
+    finish($item->{id}, "Sorry, I couldn't answer this one right now. Try asking again in a little while.");
+    return;
+  }
+  if ($pid == 0) {
+    chdir((defined $ENV{TMPDIR} && -d $ENV{TMPDIR}) ? $ENV{TMPDIR} : '/tmp');
+    $ENV{CLAUDE_CODE_DISABLE_CLAUDE_MDS} = '1';
+    open(STDIN, '<', "$AloneDir/question.txt");
+    open(STDOUT, '>', "$AloneDir/answer.txt");
+    open(STDERR, '>', "$AloneDir/error.txt");
+    exec($Cfg->{claude}, '-p', '--model', $model, '--effort', $effort, '--tools', '', '--strict-mcp-config', '--no-session-persistence',
+      '--settings', "$AloneDir/settings.json", '--output-format', 'text') or POSIX::_exit(127);
+  }
+  $Alone = { id => $item->{id}, pid => $pid, started => time };
+  activity('thinking', $item->{id});
+}
+
+sub stop_alone {
+  my $job = $Alone;
+  $Alone = undef;
+  return unless $job;
+  kill 'TERM', $job->{pid};
+  my $until = time + 3;
+  while (waitpid($job->{pid}, POSIX::WNOHANG()) == 0) {
+    if (time >= $until) { kill 'KILL', $job->{pid}; waitpid($job->{pid}, 0); last }
+    sleep 0.1;
+  }
+  unlink alone_files();
+}
+
+sub check_alone {
+  my $job = $Alone;
+  my $r = waitpid($job->{pid}, POSIX::WNOHANG());
+  if ($r == 0) {
+    if (time - $job->{started} > 100) {
+      Log('A question took over 100 seconds; stopping it.');
+      stop_alone();
+      finish($job->{id}, 'Sorry, that took too long and I stopped. Try asking again.');
+      activity('idle');
+    }
+    return;
+  }
+  my $status = $r == $job->{pid} ? $? : -1;
+  $Alone = undef;
+  my $text = slurp("$AloneDir/answer.txt");
+  $text = '' unless defined $text;
+  utf8::decode($text);
+  $text = trim($text);
+  if ($status != 0 || $text eq '') {
+    my $why = trim(slurp("$AloneDir/error.txt"));
+    my $code = $status == -1 ? -1 : ($status >> 8);
+    Log("Claude could not answer a question ($code): " . substr(trim("$why $text"), 0, 300));
+    $text = "Sorry, I couldn't answer this one right now. Try asking again in a little while.";
+  }
+  unlink alone_files();
+  finish($job->{id}, $text);
+  activity('idle');
+  Log('Answered a question in ' . int(time - $job->{started}) . 's.');
+}
+
 # Whether Claude Code has exited (waiting up to $wait seconds for it to).
 sub reap {
   my ($wait) = @_;
@@ -447,11 +525,12 @@ sub fetch_work {
   # Skip only what's in hand here: one that went to another computer and came back is taken again.
   my %busy = map { ("$_->{id}" => 1) } @Queue, @Unposted;
   $busy{"$Current->{id}"} = 1 if $Current;
+  $busy{"$Alone->{id}"} = 1 if $Alone;
   for my $q (@{ ref $r->{requests} eq 'ARRAY' ? $r->{requests} : [] }) {
     next if ref $q ne 'HASH' || !defined $q->{id} || $busy{"$q->{id}"}++;
     my $m = defined $q->{model} ? "$q->{model}" : '';
     $m = '' unless $Models{$m};
-    push @Queue, { id => $q->{id}, text => (defined $q->{text} ? "$q->{text}" : ''), model => $m, tries => 0, at => time };
+    push @Queue, { id => $q->{id}, text => (defined $q->{text} ? "$q->{text}" : ''), model => $m, tries => 0, at => time, guest => ($q->{guest} ? 1 : 0) };
   }
   $NeedFetch = 0;
   $FetchFails = 0;
@@ -514,6 +593,9 @@ sub remove_counselor {
   $Current = undef;
   stop_claude(0);
   finish($c->{id}, 'Your counselor was removed from your computer before it could answer this.') if $c;
+  my $job = $Alone;
+  stop_alone();
+  finish($job->{id}, 'Your counselor was removed from your computer before it could answer this.') if $job;
   unlink $Plist;
   my $session = trim(slurp($SessionFile));
   run_quietly(30, $Cfg->{claude}, 'project', 'purge', '-y', $Dir) if $Cfg->{claude} && -x $Cfg->{claude};
@@ -551,6 +633,7 @@ while (1) {
       if (revoked($err)) {
         Log('Its connector link was revoked, so the counselor is turning itself off.');
         stop_claude(0);
+        stop_alone();
         unlink $Plist;
         leave();
       }
@@ -585,9 +668,14 @@ while (1) {
           stop_claude(0);
           activity('idle');
         }
+        if ($Alone && $Alone->{started} < $now && !$open{"$Alone->{id}"}) {
+          Log('Stopped a question that was withdrawn or went to another computer.');
+          stop_alone();
+          activity('idle');
+        }
       }
       # Something is waiting that nothing here is working on: look again now and then.
-      $NeedFetch = 1 if $Waiting > 0 && !$Current && !@Queue && $now - $LastFetch > 60;
+      $NeedFetch = 1 if $Waiting > 0 && !$Current && !$Alone && !@Queue && $now - $LastFetch > 60;
     }
   }
 
@@ -596,6 +684,7 @@ while (1) {
     post_draft();
     handle_exit() if $Pid && (reap(0) || $OutDone);
   }
+  check_alone() if $Alone;
   if ($Current && time - $Current->{started} > 900) {
     Log('A request took over 15 minutes; stopping it.');
     my $c = $Current;
@@ -616,10 +705,13 @@ while (1) {
     stop_claude(0);
   }
 
-  if (!$Current && !$Switching) {
+  if (!$Current && !$Switching && !$Alone) {
     # A new effort takes effect between requests (a new model switches in place, below).
     stop_claude(1) if $Pid && $ProcEffort ne $Effort;
-    if (!$Paused && @Queue) {
+    if (!$Paused && @Queue && $Queue[0]{guest}) {
+      my $item = shift @Queue;
+      start_alone($item, $item->{model} || $Model, $Effort);
+    } elsif (!$Paused && @Queue) {
       my $want = $Queue[0]{model} || $Model;
       start_claude($want, $Effort) if !$Pid && time >= $NextStart;
       if ($Pid && @Queue) {
@@ -631,7 +723,7 @@ while (1) {
       Log('Claude Code is resting.');
     }
   }
-  sleep($Current ? 0.15 : 0.4) unless $Pid;
+  sleep(($Current || $Alone) ? 0.15 : 0.4) unless $Pid;
 }
 `;
 
@@ -648,9 +740,13 @@ echo "The Average App counselor is off. Run the setup from the Counselor page ag
 const SETUP = String.raw`#!/bin/bash
 # Average App counselor setup for Mac, run by the line Settings > Counselor gives you to paste
 # into Terminal (or, saved as a .command file and double-clicked, once allowed in System Settings >
-# Privacy & Security > Open Anyway). It was written for you by the website: it sets up Claude Code as your counselor, running in the background on your own Claude
-# plan. Without Claude Code it offers to install it (Anthropic's own installer, no password) and,
-# not signed in, opens your browser to sign in. Nothing else comes from the internet.
+# Privacy & Security > Open Anyway). It was written for you by the website: it sets up Claude Code
+# as your counselor, running in the background on your own Claude plan. Without Claude Code it
+# offers to install it (Anthropic's own installer, no password) and, not signed in, opens your
+# browser to sign in. Nothing else comes from the internet.
+
+# All in one function, run at the end: a download cut off partway runs none of it.
+main() {
 SITE='__SITE__'
 SUPABASE_URL='__SUPABASE_URL__'
 KEY='__KEY__'
@@ -699,11 +795,11 @@ if ! /usr/bin/perl -MJSON::PP -MIO::Select -MIPC::Open3 -MFcntl -MTime::HiRes -M
   exit 1
 fi
 
-# A setup file from an older download carries a link that's been turned off: say so, and change
+# An older setup line (or file) carries a link that's been turned off: say so, and change
 # nothing (and install nothing).
 LIVE=$(/usr/bin/curl -q -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/api/counselor/$TOKEN" 2>/dev/null)
 if [ "$LIVE" = 403 ] || [ "$LIVE" = 404 ]; then
-  say "$(printf 'This setup file is from an older download, and its link has been turned off.\n\nIn Downloads, open the newest counselor setup file (its name may end in 2 or (1)), or download it again from Settings > Counselor.')" 2
+  say "$(printf 'This setup line is an older one, and its link has been turned off.\n\nCopy the line from Settings > Counselor again and paste it into Terminal.')" 2
   exit 1
 fi
 
@@ -711,7 +807,7 @@ fi
 # missing (into your home folder; no password, nothing to type).
 if ! find_claude; then
   if ! ask $'Your counselor runs on Claude Code, Anthropic\'s app for your Claude account, and it is not on this Mac yet.\n\nInstall it now? It takes a minute or two, needs no password, and nothing else is installed. (You will need a Claude Pro or Max plan to use it.)'; then
-    say $'The counselor needs Claude Code. Open this file again whenever you are ready to install it.' 1
+    say $'The counselor needs Claude Code. Paste the setup line into Terminal again whenever you are ready to install it.' 1
     exit 1
   fi
   echo "Installing Claude Code from Anthropic (a minute or two)..."
@@ -721,7 +817,7 @@ if ! find_claude; then
     ( set -o pipefail; /usr/bin/curl -q -fsSL https://claude.ai/install.sh | /bin/bash )
   fi
   if ! find_claude; then
-    say $'Claude Code could not be installed.\n\nIt may have been blocked by your internet connection or a school or work network. You can install it from claude.com/claude-code, then open this file again.' 0
+    say $'Claude Code could not be installed.\n\nIt may have been blocked by your internet connection or a school or work network. You can install it from claude.com/claude-code, then paste the setup line into Terminal again.' 0
     exit 1
   fi
 fi
@@ -729,13 +825,13 @@ fi
 # Signed in: if not, your browser opens to sign in (the same Claude account as the website).
 if ! signed_in; then
   if ! ask $'Next, sign in to Claude Code with your Claude account.\n\nYour browser opens: sign in, click Authorize, then come back to this window. (Claude Code needs a Claude Pro or Max plan.)'; then
-    say $'The counselor needs Claude Code signed in. Open this file again whenever you are ready.' 1
+    say $'The counselor needs Claude Code signed in. Paste the setup line into Terminal again whenever you are ready.' 1
     exit 1
   fi
   echo "Opening your browser to sign in to Claude..."
   "$CLAUDE" auth login --claudeai
   if ! signed_in; then
-    say $'Claude Code is not signed in yet, so the counselor cannot start.\n\nOpen this file again to try signing in once more.' 2
+    say $'Claude Code is not signed in yet, so the counselor cannot start.\n\nPaste the setup line into Terminal again to try signing in once more.' 2
     exit 1
   fi
 fi
@@ -849,7 +945,7 @@ if [ "$OK" = 0 ] && { printf '%s' "$CHECK" | grep -Eqi 'authenticat|/login|oauth
   fi
 fi
 if [ "$OK" = 0 ]; then
-  say "$(printf 'Claude Code could not reach your desk:\n\n%s\n\nOpen this file again to try once more (it offers to sign in to Claude again if that is what is wrong). If it keeps happening, check your internet connection and that your Claude plan is Pro or Max.' "$(printf '%s' "$CHECK" | head -c 600)")" 0
+  say "$(printf 'Claude Code could not reach your desk:\n\n%s\n\nPaste the setup line into Terminal again to try once more (it offers to sign in to Claude again if that is what is wrong). If it keeps happening, check your internet connection and that your Claude plan is Pro or Max.' "$(printf '%s' "$CHECK" | head -c 600)")" 0
   exit 1
 fi
 printf '%s' "$SESSION" > session.txt
@@ -906,11 +1002,14 @@ if [ -z "$AVERAGEAPP_TEST" ] || [ -n "$AVERAGEAPP_TEST_LAUNCHD" ]; then
     if /bin/launchctl bootstrap "gui/$UIDN" "$PLIST" >/dev/null 2>&1; then LOADED=1; break; fi
     sleep 1
   done
-  [ "$LOADED" = 1 ] || fail "macOS would not start it in the background. Try opening this file again."
+  [ "$LOADED" = 1 ] || fail "macOS would not start it in the background. Paste the setup line into Terminal again."
 fi
 
 say "$(printf 'Your counselor is on.\n\nTalk to it on the Counselor page, or ask anything on your desk (Ask, Polish, odds, the Profile interview): Claude answers there, with nothing else to open. It runs in the background and starts again whenever you log in to your Mac. If your Mac says Background Items Added, that is your counselor: leave it on.\n\nPause it or remove it in Settings, under Counselor. You can close this window.')" 1
 exit 0
+}
+
+main "$@"
 `;
 
 /** Text for a quoted bash heredoc: no line may be its end marker. */

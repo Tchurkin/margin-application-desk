@@ -12,7 +12,11 @@ import { supabaseEnv } from "@/lib/supabase/env";
 
 export async function GET(request: Request, ctx: RouteContext<"/api/counselor/[token]/setup">) {
   const { token } = await ctx.params;
-  if (!validToken(token)) return new Response("echo 'This setup line is not valid. Copy it again from Settings > Counselor.'; exit 1\n", { status: 404 });
+  // A script that says so: curl -f would drop the body of an error response, and bash would run nothing.
+  if (!validToken(token))
+    return new Response("echo 'This setup line is not valid. Copy it again from Settings > Counselor.'; exit 1\n", {
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" },
+    });
   const { url, key } = supabaseEnv();
   const script = macInstaller({ site: new URL(request.url).origin, supabaseUrl: url, supabaseKey: key, token });
   return new Response(script, { headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "no-store" } });

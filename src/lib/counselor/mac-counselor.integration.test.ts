@@ -52,6 +52,18 @@ if (@ARGV >= 2 && $ARGV[0] eq 'auth') {
 }
 my %o;
 for my $i (0 .. $#ARGV - 1) { $o{$1} = $ARGV[$i + 1] if $ARGV[$i] =~ /^--(session-id|resume|model|effort)$/ }
+# A question answered on its own (no tools): the prompt on stdin, the answer on stdout.
+if (grep { $_ eq '--tools' } @ARGV) {
+  my $q = do { local $/; <STDIN> };
+  utf8::decode($q);
+  require Cwd;
+  note({ alone => $q, model => $o{model}, cwd => Cwd::getcwd(), mds => ($ENV{CLAUDE_CODE_DISABLE_CLAUDE_MDS} // '') });
+  my $say = $q =~ /Reply with exactly: ([^\n]+)/ ? $1 : 'ok';
+  sleep 5 if $q =~ /\(slowly\)/;
+  binmode STDOUT, ':utf8';
+  print "[alone $o{model}] $say\n";
+  exit 0;
+}
 my $session = $o{'session-id'} || $o{resume} || '';
 if ($session ne '') {
   my $d = "$ENV{HOME}/.claude/projects/-home-Library-Application-Support-AverageApp-Counselor";
@@ -96,7 +108,7 @@ while (my $line = <STDIN>) {
 exit 0;
 `;
 
-type Req = { id: string; text: string; model?: string; pending: boolean; taken: boolean };
+type Req = { id: string; text: string; model?: string; pending: boolean; taken: boolean; guest?: boolean };
 type Event = { fn?: string; fetched?: string[]; args?: Record<string, unknown>; apikey?: string; type?: string };
 
 /** The desk, as the counselor sees it. */
@@ -147,7 +159,9 @@ class Desk {
         }
         if (path === `/api/counselor/${TOKEN}`) {
           if (this.stale) return send({ message: "gone" }, 403);
-          const out = this.requests.filter((r) => r.pending && r.taken).map((r) => ({ id: r.id, kind: "chat", text: r.text, model: r.model ?? "" }));
+          const out = this.requests
+            .filter((r) => r.pending && r.taken)
+            .map((r) => ({ id: r.id, kind: r.guest ? "ask" : "chat", text: r.text, model: r.model ?? "", ...(r.guest ? { guest: true } : {}) }));
           this.events.push({ fetched: out.map((r) => r.id) });
           return send({ requests: out });
         }
@@ -167,6 +181,10 @@ class Desk {
   }
   ask(id: string, message: string, model?: string) {
     this.requests.push({ id, text: `# A request\nThe student's message:\n${message}`, model, pending: true, taken: false });
+  }
+  /** A question from someone the desk is shared with. */
+  askGuest(id: string, message: string) {
+    this.requests.push({ id, text: `# A question about one of a student's college essays\nMom Testy asks:\n${message}`, pending: true, taken: false, guest: true });
   }
   calls(fn: string, id?: string) {
     return this.events.filter((e) => e.fn === fn && (id === undefined || e.args?.request === id));
@@ -215,7 +233,7 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
       ? readFileSync(claudeLog, "utf8")
           .split("\n")
           .filter(Boolean)
-          .map((l) => JSON.parse(l) as { argv?: string[]; asked?: string; model?: string; switched?: string })
+          .map((l) => JSON.parse(l) as { argv?: string[]; asked?: string; alone?: string; model?: string; switched?: string; cwd?: string; mds?: string })
       : [];
   const counselorLog = () => (existsSync(join(dir, "counselor.log")) ? readFileSync(join(dir, "counselor.log"), "utf8") : "");
 
@@ -287,6 +305,36 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
     await until("r2's answer", () => !!desk.answer("r2"));
     expect(desk.answer("r2")).toBe("[haiku] second one done");
     expect(claudeCalls().some((c) => c.switched === "haiku")).toBe(true);
+  });
+
+  it("answers a question from someone the desk is shared with on its own: no tools, and not in the conversation", async () => {
+    desk.askGuest("g1", "Reply with exactly: for Mom, Café ✓");
+    await until("g1's answer", () => !!desk.answer("g1"));
+    expect(desk.answer("g1")).toBe("[alone sonnet] for Mom, Café ✓");
+    const alone = claudeCalls().filter((c) => c.argv?.includes("--tools"));
+    expect(alone).toHaveLength(1);
+    expect(alone[0].argv).toEqual(expect.arrayContaining(["-p", "--tools", "", "--strict-mcp-config", "--no-session-persistence", "--model", "sonnet"]));
+    for (const flag of ["--resume", "--session-id", "--mcp-config", "--allowedTools", "stream-json"]) expect(alone[0].argv).not.toContain(flag);
+    expect(alone[0].argv).toEqual(expect.arrayContaining(["--settings", join(dir, "alone", "settings.json")]));
+    // Away from the counselor's CLAUDE.md, and with none loaded.
+    const run = claudeCalls().find((c) => c.alone?.includes("for Mom, Café ✓"));
+    expect(run?.mds).toBe("1");
+    expect(run?.cwd?.startsWith(dir)).toBe(false);
+    expect(claudeCalls().some((c) => c.asked?.includes("for Mom"))).toBe(false);
+    expect(desk.calls("connector_activity", "g1").map((e) => e.args?.tool)).toContain("thinking");
+    // Nothing of the question is left behind.
+    expect(existsSync(join(dir, "alone", "question.txt"))).toBe(false);
+    expect(existsSync(join(dir, "alone", "answer.txt"))).toBe(false);
+  });
+
+  it("stops a guest's question that was withdrawn while it was being answered", async () => {
+    desk.askGuest("g2", "Reply with exactly: never mind\n(slowly)");
+    await until("g2 to start", () => claudeCalls().some((c) => c.alone?.includes("never mind")));
+    desk.requests.find((r) => r.id === "g2")!.pending = false;
+    await until("g2 to stop", () => counselorLog().includes("Stopped a question that was withdrawn"));
+    expect(desk.answer("g2")).toBeUndefined();
+    desk.ask("r2b", "Reply with exactly: carries on");
+    await until("r2b's answer", () => !!desk.answer("r2b"));
   });
 
   it("drops a question the student withdrew before its turn", async () => {

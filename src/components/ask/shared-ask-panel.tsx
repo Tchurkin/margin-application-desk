@@ -63,11 +63,11 @@ export function SharedAskPanel({ deskId, pieceId, pieceTitle, canAsk }: { deskId
     [supabase, deskId, pieceId, load],
   );
 
-  // A backstop for a dropped realtime connection while an answer is due.
+  // A backstop for a dropped realtime connection while an answer is due, and for what realtime
+  // can't bring here: a question the student dismisses is one this viewer may no longer read.
   const waiting = hasWaiting(rows);
   useEffect(() => {
-    if (!waiting) return;
-    const t = setInterval(() => document.visibilityState === "visible" && void load(), POLL_MS);
+    const t = setInterval(() => document.visibilityState === "visible" && void load(), waiting ? POLL_MS : ON_MS);
     return () => clearInterval(t);
   }, [waiting, load]);
 

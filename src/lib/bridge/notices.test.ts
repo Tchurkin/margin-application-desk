@@ -20,6 +20,7 @@ describe("answer notices", () => {
       text: "Claude answered your question about “Why us?”.",
     });
     expect(noticeFor({ ...r("polish", "p1"), answered_by: "ChatGPT" }, "/desk/piece/p2", "Why us?")?.text).toBe("ChatGPT's rewrites about “Why us?” are ready.");
+    expect(noticeFor({ ...r("ask", "p1"), asked_by: "Mom Testy" }, "/desk", "Why us?")?.text).toBe("Claude answered Mom Testy's question about “Why us?”.");
   });
 
   it("stays quiet when the answer is already in front of the student", () => {
