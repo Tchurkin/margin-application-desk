@@ -34,6 +34,8 @@ export interface Connector {
   /** Its default model and how hard it thinks (migration 20261004). */
   counselor_model?: string;
   counselor_effort?: string;
+  /** The computer it runs on, as that computer names itself (migration 20261017). */
+  counselor_computer?: string;
   activity?: Activity | null;
   activity_at?: string | null;
   /** Migration 20261001. */
@@ -123,6 +125,7 @@ export function activityOn(connectors: Connector[] | null, requestId: string, no
 
 /** Newest schema first; each fallback is a database one migration further behind. */
 const COLUMNS = [
+  "id, label, last_used_at, watched_at, counselor_at, counselor_speed, counselor_paused, counselor_version, counselor_remove, activity, activity_at, essay_access, can_manage, replaces, counselor_model, counselor_effort, counselor_computer",
   "id, label, last_used_at, watched_at, counselor_at, counselor_speed, counselor_paused, counselor_version, counselor_remove, activity, activity_at, essay_access, can_manage, replaces, counselor_model, counselor_effort",
   "id, label, last_used_at, watched_at, counselor_at, counselor_speed, counselor_paused, counselor_version, counselor_remove, activity, activity_at, essay_access, can_manage, replaces",
   "id, label, last_used_at, watched_at, counselor_at, counselor_speed, counselor_paused, counselor_version, counselor_remove, activity, activity_at, essay_access, can_manage",

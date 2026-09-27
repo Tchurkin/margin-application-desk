@@ -43,6 +43,7 @@ export const PROBES: Record<string, string> = {
   "20261014000000": fn("desk_share_guesses"),
   "20261015000000": tbl("profile_files"),
   "20261016000000": `coalesce(position('desk:' in pg_get_functiondef(to_regprocedure('public.can_use_piece_topic(text)'))) > 0, false)`,
+  "20261017000000": col("desk_requests", "counselor_link"),
 };
 
 /**

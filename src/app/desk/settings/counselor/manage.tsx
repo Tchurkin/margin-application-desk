@@ -15,8 +15,9 @@ import { CounselorSetup, InstallSteps, usePlatform } from "../counselor-setup";
 
 /*
  * Settings → Counselor: set it up, or, for each computer it runs on, see whether it's on and
- * change what it may do, update it, pause it or remove it. Talking to it, and picking its model,
- * happen on the Counselor page.
+ * change what it may do, update it, pause it or remove it; and add it to another computer. Each
+ * question goes to one of them (team request 22). Talking to it, and picking its model, happen
+ * on the Counselor page.
  */
 
 type Installed = Connector & { id: string };
@@ -39,14 +40,22 @@ export function CounselorManage({ deskId }: { deskId: string }) {
         <CounselorCard
           key={c.id}
           counselor={c}
-          title={mine.length > 1 ? `Counselor ${i + 1}` : "Your counselor"}
+          title={c.counselor_computer?.trim() || (mine.length > 1 ? `Counselor ${i + 1}` : "Your counselor")}
           pending={pendingReplacement(connectors, c.id)}
           now={now}
           onChange={reload}
         />
       ))}
+      <details className="card px-4 py-3" data-testid="counselor-add">
+        <summary className="cursor-pointer font-medium">Add it to another computer</summary>
+        <p className="mt-2 mb-3 text-sm text-muted">
+          Run it on as many computers as you like: each question goes to one of them, and if that computer goes to sleep, another
+          one picks it up. Do this on the computer you want to add.
+        </p>
+        <CounselorSetup />
+      </details>
       <p className="text-sm text-muted">
-        Talk to it and choose its model on the{" "}
+        Talk to it and choose its model (for every computer) on the{" "}
         <Link href="/desk/counselor" className="underline underline-offset-2">
           Counselor page
         </Link>
@@ -104,6 +113,11 @@ function CounselorCard({
     <section className="card flex flex-col gap-4 px-4 py-4" aria-label={title} data-testid="counselor-card">
       <div>
         <h3 className="font-medium">{title}</h3>
+        {c.counselor_version && (
+          <p className="text-xs text-muted" data-testid="counselor-about">
+            {theirs === "mac" ? "Mac" : "Windows"} · version {c.counselor_version.split("-")[0]}
+          </p>
+        )}
         <p
           data-testid="counselor-state"
           className={`mt-1 flex items-center gap-1.5 text-sm ${on && !paused ? "text-accent" : paused ? "text-warn" : "text-muted"}`}
@@ -131,8 +145,8 @@ function CounselorCard({
         outdated && (
           <div className="rounded-md border border-accent bg-accent-soft px-3 py-2 text-sm" data-testid="counselor-update">
             <p className="mb-2">
-              A newer counselor is ready: pick any Claude model for it, no start-up wait, and answers that appear as they&apos;re
-              written.
+              A newer counselor is ready: it shows this computer&apos;s name here, and shares the questions with your counselor on
+              your other computers.
             </p>
             <button
               type="button"
@@ -150,7 +164,7 @@ function CounselorCard({
               Update the counselor
             </button>
             {platform !== null && !here && (
-              <p className="mt-1 text-xs text-muted">Open this page on the {theirs === "mac" ? "Mac" : "Windows PC"} your counselor runs on to update it.</p>
+              <p className="mt-1 text-xs text-muted">Open this page on the {theirs === "mac" ? "Mac" : "Windows PC"} this counselor runs on to update it.</p>
             )}
           </div>
         )

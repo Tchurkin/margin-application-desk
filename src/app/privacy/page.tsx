@@ -82,7 +82,8 @@ export default function PrivacyPage() {
         <li>
           <strong>The counselor.</strong> A setup file for Windows or Mac that runs Claude Code, on your own Claude account, on your own
           computer. If Claude Code isn&apos;t there yet, the setup installs it from Anthropic, with your OK, and you sign in to it with
-          your Claude account. It keeps its settings (including its connector link) and a log in a folder on your computer, and Claude Code
+          your Claude account. You can run it on several computers; each tells the site its computer&apos;s name (shown to you
+          in Settings) and a scrambled id that tells your computers apart. It keeps its settings (including its connector link) and a log in a folder on your computer, and Claude Code
           keeps its conversation there too. &ldquo;Remove from computer&rdquo; in Settings deletes them; otherwise they stay until
           you delete them.
         </li>

@@ -72,6 +72,17 @@ const WATCHER = String.raw`# Average App counselor ${COUNSELOR_VERSION}: watches
 $ErrorActionPreference = 'Continue'
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $Version = '${COUNSELOR_VERSION}'
+# Which computer this is: a name for Settings, and an id (a hash of Windows' own, never the id
+# itself) that tells this computer from the student's others.
+$Computer = [string]$env:COMPUTERNAME
+$Machine = ''
+try {
+  $guid = (Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Cryptography' -Name MachineGuid -ErrorAction Stop).MachineGuid
+  $sha = [Security.Cryptography.SHA256]::Create()
+  $Machine = -join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes('averageapp:' + $guid)) | ForEach-Object { $_.ToString('x2') })
+} catch { }
+# A database from before migration 20261017 doesn't take them: then it checks in without.
+$SaysComputer = $true
 $Dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Cfg = [IO.File]::ReadAllText((Join-Path $Dir 'config.json')) | ConvertFrom-Json
 $LogFile = Join-Path $Dir 'counselor.log'
@@ -440,7 +451,9 @@ while ($true) {
   if (($now - $LastPoll).TotalSeconds -ge $interval) {
     $LastPoll = $now
     try {
-      $r = Rpc 'connector_counselor_poll' @{ token = $Cfg.token; version = $Version }
+      $pollArgs = @{ token = $Cfg.token; version = $Version }
+      if ($SaysComputer) { $pollArgs.computer = $Computer; $pollArgs.machine = $Machine }
+      $r = Rpc 'connector_counselor_poll' $pollArgs
       if ($Fails -gt 1) { Log ('Reached the desk again after ' + $Fails + ' tries.') }
       $Fails = 0
       if ($r.remove) { Remove-Counselor }
@@ -467,6 +480,11 @@ while ($true) {
     } catch {
       $detail = ''
       if ($_.ErrorDetails) { $detail = $_.ErrorDetails.Message }
+      if ($SaysComputer -and $detail -like '*PGRST202*') {
+        $SaysComputer = $false
+        Log 'The desk is a database update behind: checking in without this computer''s name.'
+        continue
+      }
       if ($detail -like '*not valid*') {
         Log 'Its connector link was revoked, so the counselor is turning itself off.'
         Stop-Claude $false

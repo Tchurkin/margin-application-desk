@@ -240,3 +240,46 @@ test("an answer that arrives on another page lights up its tab and says where it
   await expect(page.getByTestId("desk-notices")).toHaveAttribute("data-ready", "true");
   await expect(tab).toHaveAccessibleName("Counselor");
 });
+
+test("the counselor on two computers: each question goes to one of them, and Settings lists both", async ({ page, request }) => {
+  await signUp(page, "twopcs");
+  const tokenOne = (await makeConnector(page)).split("/api/mcp/")[1];
+  const tokenTwo = (await makeConnector(page)).split("/api/mcp/")[1];
+  const one = counselorApi(tokenOne);
+  const two = counselorApi(tokenTwo);
+  // Each checks in saying which computer it's on (a name, and a hashed id).
+  const checkIn = async (c: ReturnType<typeof counselorApi>, version: string, computer: string, machine: string) => {
+    const { data, error } = await c.rpc("connector_counselor_poll", { version, computer, machine });
+    if (error) throw new Error(error.message);
+    return data as Poll & { pending: string[] };
+  };
+  await checkIn(one, COUNSELOR_VERSION, "TESTY-DESKTOP", "e2e-machine-one");
+  await checkIn(two, `${COUNSELOR_VERSION}-mac`, "Testy's MacBook", "e2e-machine-two");
+
+  await page.goto("/desk/counselor");
+  await chat(page).getByRole("button", { name: "What should I work on this week?" }).click();
+  await expect(chat(page)).toContainText("What should I work on this week?");
+
+  // The first to check in takes it; the other never sees it.
+  const first = await checkIn(one, COUNSELOR_VERSION, "TESTY-DESKTOP", "e2e-machine-one");
+  expect(first.fresh).toBe(1);
+  const second = await checkIn(two, `${COUNSELOR_VERSION}-mac`, "Testy's MacBook", "e2e-machine-two");
+  expect(second).toMatchObject({ fresh: 0, waiting: 0, pending: [] });
+  const workOne = (await (await request.get(`/api/counselor/${tokenOne}`)).json()) as { requests: { id: string }[] };
+  const workTwo = (await (await request.get(`/api/counselor/${tokenTwo}`)).json()) as { requests: { id: string }[] };
+  expect(workOne.requests).toHaveLength(1);
+  expect(workTwo.requests).toHaveLength(0);
+  // Only the one holding it can answer.
+  const id = workOne.requests[0].id;
+  expect((await two.rpc("connector_finish_request", { request: id, answer_text: "From the Mac." })).data).toBe(false);
+  expect((await one.rpc("connector_finish_request", { request: id, answer_text: "From the desktop." })).data).toBe(true);
+  await expect(chat(page)).toContainText("From the desktop.");
+  await expect(chat(page)).not.toContainText("From the Mac.");
+
+  // Settings lists each computer by its name, and offers to add another.
+  await page.goto(SETTINGS);
+  await expect(card(page)).toHaveCount(2);
+  await expect(page.getByRole("region", { name: "TESTY-DESKTOP" })).toContainText("Windows · version");
+  await expect(page.getByRole("region", { name: "Testy's MacBook" })).toContainText("Mac · version");
+  await expect(page.getByTestId("counselor-add").getByText("Add it to another computer")).toBeVisible();
+});

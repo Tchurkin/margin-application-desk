@@ -127,14 +127,19 @@ export async function setConnectorPermissions(id: string, essays: EssayAccess, m
 const speedFor = (model: ModelId, effort: EffortId): CounselorSpeed =>
   model === "opus" || model === "fable" ? "thorough" : effort === "low" ? "fast" : "balanced";
 
-/** The counselor's default model and how hard it thinks; they take effect from the next request. */
+/**
+ * The counselor's default model and how hard it thinks; they take effect from the next request.
+ * The same on every computer it runs on (and on an update not yet run), whichever one is chosen.
+ */
 export async function setCounselorModel(id: string, model: ModelId, effort: EffortId) {
-  const { supabase } = await requireDesk();
+  const { supabase, desk } = await requireDesk();
   if (!isModel(model) || !isEffort(effort)) throw new Error("Unknown model.");
   const { error } = await supabase
     .from("connector_links")
     .update({ counselor_model: model, counselor_effort: effort, counselor_speed: speedFor(model, effort) })
-    .eq("id", id);
+    .eq("desk_id", desk.id)
+    .is("revoked_at", null)
+    .or(`id.eq.${id},counselor_at.not.is.null,replaces.not.is.null`);
   if (error) throw new Error(error.message);
   revalidate();
 }

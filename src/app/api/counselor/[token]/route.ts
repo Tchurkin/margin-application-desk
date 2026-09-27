@@ -1,11 +1,13 @@
+import { bridgeMissing } from "@/lib/bridge/requests";
 import type { PendingRequest } from "@/lib/bridge/listing";
 import { counselorMessages } from "@/lib/connector/context";
 import { db, validToken } from "@/lib/connector/tools";
 
 /*
  * The counselor on the student's computer (src/lib/counselor/installer.ts) fetches its work here:
- * every request waiting on the desk, each as one message with the context it needs (the piece,
- * the college list, the profile), so Claude can answer without reading first.
+ * the requests given to it (a desk can have a counselor on several computers, and each request
+ * goes to one), each as one message with the context it needs (the piece, the college list, the
+ * profile), so Claude can answer without reading first.
  */
 
 export const maxDuration = 30;
@@ -26,7 +28,9 @@ export async function GET(_request: Request, ctx: RouteContext<"/api/counselor/[
   const { token } = await ctx.params;
   if (!validToken(token)) return asciiJson({ error: "Not found." }, 404);
   const sb = db();
-  const { data, error } = await sb.rpc("connector_requests", { token });
+  let { data, error } = await sb.rpc("connector_counselor_requests", { token });
+  // A database before migration 20261017: every waiting request, as before.
+  if (error && bridgeMissing(error)) ({ data, error } = await sb.rpc("connector_requests", { token }));
   if (error) return asciiJson({ error: error.message }, /not valid/i.test(error.message) ? 403 : 500);
   const rows = ((data as PendingRequest[] | null) ?? []).slice(0, BATCH);
   return asciiJson({ requests: await counselorMessages(sb, token, rows) });

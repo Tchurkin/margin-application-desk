@@ -52,6 +52,23 @@ my $Dir = dirname(abs_path($0));
 chdir $Dir;
 my $Home = $ENV{HOME};
 my $J = JSON::PP->new->utf8->canonical->allow_nonref;
+
+# Which computer this is: a name for Settings, and an id (a hash of the Mac's own, never the id
+# itself) that tells this Mac from the student's other computers.
+my $Computer = qx{/usr/sbin/scutil --get ComputerName 2>/dev/null};
+$Computer = '' unless defined $Computer;
+chomp $Computer;
+utf8::decode($Computer);
+my $Machine = '';
+{
+  my $io = qx{/usr/sbin/ioreg -rd1 -c IOPlatformExpertDevice 2>/dev/null};
+  if (defined $io && $io =~ /"IOPlatformUUID"\s*=\s*"([^"]+)"/) {
+    my $uuid = $1;
+    $Machine = eval { require Digest::SHA; Digest::SHA::sha256_hex("averageapp:$uuid") } || '';
+  }
+}
+# A database from before migration 20261017 doesn't take them: then it checks in without.
+my $SaysComputer = 1;
 my $LogFile = "$Dir/counselor.log";
 my $SessionFile = "$Dir/session.txt";
 my $Mcp = "$Dir/mcp.json";
@@ -516,9 +533,14 @@ while (1) {
   if ($now - $LastPoll >= $interval) {
     $LastPoll = $now;
     # "-mac": the website tells a Mac counselor from a Windows one (to offer the right update).
-    my $r = eval { rpc('connector_counselor_poll', { token => $Cfg->{token}, version => "$Version-mac" }) };
+    my %poll = (token => $Cfg->{token}, version => "$Version-mac");
+    @poll{qw(computer machine)} = ($Computer, $Machine) if $SaysComputer;
+    my $r = eval { rpc('connector_counselor_poll', \%poll) };
     my $err = $@;
-    if ($err) {
+    if ($err && $SaysComputer && $err =~ /PGRST202/) {
+      $SaysComputer = 0;
+      Log("The desk is a database update behind: checking in without this computer's name.");
+    } elsif ($err) {
       if (revoked($err)) {
         Log('Its connector link was revoked, so the counselor is turning itself off.');
         stop_claude(0);
