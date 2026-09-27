@@ -546,6 +546,7 @@ export function PieceEditor({
     <WriteWorkspace
       workspace={workspace}
       owner={owner}
+      canAsk={role === "suggest" || role === "edit"}
       me={{ id: me.id, name: me.name, color: colorFor(me.id) }}
       pieceId={piece.id}
       deskId={deskId ?? ""}

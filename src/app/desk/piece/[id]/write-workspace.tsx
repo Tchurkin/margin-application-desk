@@ -3,6 +3,7 @@
 import type { Editor } from "@tiptap/react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { AskPanel } from "@/components/ask/ask-panel";
+import { SharedAskPanel } from "@/components/ask/shared-ask-panel";
 import { CollegeRail } from "@/components/write/college-rail";
 import { ConfirmDialog } from "@/components/write/confirm-dialog";
 import { AskIcon, FilesIcon, HistoryIcon } from "@/components/write/icons";
@@ -17,10 +18,9 @@ import { deletePiece } from "../../actions";
 const FILES: ToolDef = { id: "files", label: "Files", hint: "Colleges and pieces", icon: <FilesIcon /> };
 const ASK: ToolDef = { id: "ask", label: "Ask", hint: "Ask Claude or ChatGPT about this piece", icon: <AskIcon /> };
 const HISTORY: ToolDef = { id: "history", label: "History", hint: "Earlier versions of this piece", icon: <HistoryIcon /> };
-// Asking the counselor, adding and deleting pieces are the student's; people they share with
-// move around the desk and read the history.
-const OWNER_TOOLS = [FILES, ASK, HISTORY];
-const GUEST_TOOLS = [FILES, HISTORY];
+// People the desk is shared with move around it, read the history, and follow the essay's Ask
+// chat (asking in it too, if they can suggest or edit); adding and deleting pieces are the student's.
+const TOOLS = [FILES, ASK, HISTORY];
 
 /**
  * The Write page around the editor: the tool strip and side panel (the college rail, Ask,
@@ -30,6 +30,7 @@ const GUEST_TOOLS = [FILES, HISTORY];
 export function WriteWorkspace({
   workspace,
   owner,
+  canAsk,
   me,
   pieceId,
   deskId,
@@ -43,6 +44,8 @@ export function WriteWorkspace({
 }: {
   workspace: { groups: RailGroup[]; tabs: RailPiece[]; base: string };
   owner: boolean;
+  /** Someone the desk is shared with who may ask in the essay's Ask chat (they can suggest or edit). */
+  canAsk: boolean;
   /** Who is at this screen, as the people on the desk see them. */
   me: { id: string; name: string; color: string };
   pieceId: string;
@@ -71,7 +74,7 @@ export function WriteWorkspace({
 
   return (
     <Workspace
-      tools={owner ? OWNER_TOOLS : GUEST_TOOLS}
+      tools={TOOLS}
       title={(t) => (t === "files" ? "Colleges" : t === "ask" ? `Asking about ${title}` : "History")}
       renderPanel={(t) =>
         t === "files" ? (
@@ -83,6 +86,10 @@ export function WriteWorkspace({
             live={{ count: countNow, status }}
             people={people}
           />
+        ) : t === "ask" && !owner ? (
+          <div className="p-3">
+            <SharedAskPanel deskId={deskId} pieceId={pieceId} pieceTitle={title} canAsk={canAsk} />
+          </div>
         ) : t === "ask" ? (
           <div className="p-3">
             <AskPanel

@@ -1,8 +1,9 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Page } from "@playwright/test";
 import { COUNSELOR_VERSION } from "../src/lib/counselor/version";
-import { addCollege, addPiece, apiClient, signUp, studentClient } from "./helpers";
+import { addCollege, addPiece, adminClient, apiClient, signUp, studentClient } from "./helpers";
 
 /*
  * The Counselor page and Settings → Counselor, driven the way the counselor on a student's
@@ -155,7 +156,14 @@ test.describe("on a Windows computer", () => {
 
     // Until the new counselor runs, the old one keeps working.
     expect((await old.poll("1")).model).toBe("haiku");
-    // The new one's first check-in turns the old one off.
+    // The setup on its computer stops the old one. Once that one has gone quiet (it never said which
+    // computer it's on, so a counselor still checking in would be another computer's), the new
+    // one's check-in turns it off.
+    const ago = new Date(Date.now() - 60_000).toISOString();
+    await adminClient()
+      .from("connector_links")
+      .update({ counselor_at: ago, last_used_at: ago, activity_at: null })
+      .eq("token_hash", createHash("sha256").update(token).digest("hex"));
     expect(await counselorApi(fresh).poll()).toMatchObject({ model: "haiku", paused: false });
     await expect(old.poll("1")).rejects.toThrow(/not valid/);
     await page.reload();

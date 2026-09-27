@@ -118,3 +118,19 @@ describe("renderRequestList", () => {
     expect(long).toContain("[…cut here: read_piece has the whole text]");
   });
 });
+
+describe("a question from someone the desk is shared with", () => {
+  it("says who asked, and that the counselor answers them without changing the desk or telling what's only the student's", () => {
+    const t = renderRequest(row("g1", { asked_by: "Mom Testy", prompt: "Is the ending too abrupt?" }), { answer: "reply" });
+    expect(t).toContain("Question from Mom Testy, someone the student shares their desk with (not the student):");
+    expect(t).toContain("Is the ending too abrupt?");
+    expect(t).toContain("don't reveal those");
+    expect(t).toContain("change nothing on the desk for them");
+  });
+
+  it("reads as the student's own when nobody else asked", () => {
+    const t = renderRequest(row("s1", { asked_by: "" }));
+    expect(t).toContain("Question:");
+    expect(t).not.toContain("shares their desk");
+  });
+});

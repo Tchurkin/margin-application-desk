@@ -27,7 +27,12 @@ export interface DeskRequest {
   counselor_at?: string | null;
   /** The Claude model asked for, or "" for the counselor's default (migration 20261004). */
   model?: string;
+  /** Who asked, when it wasn't the student: someone they share the desk with (migration 20261019). */
+  asked_by?: string;
 }
+
+/** Who asked, on a database with migration 20261019 (else read without it). */
+export const ASKED_COLS = ", asked_by";
 
 export const REQUEST_COLS =
   "id, desk_id, piece_id, kind, prompt, selection, status, answer, answered_by, created_at, answered_at, counselor_at";

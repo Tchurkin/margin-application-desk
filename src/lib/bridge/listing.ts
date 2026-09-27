@@ -26,6 +26,8 @@ export interface PendingRequest {
   created_at: string;
   /** The model asked for, "" (or missing before migration 20261004) for the default. */
   model?: string;
+  /** Who asked, when it wasn't the student: someone they share the desk with (migration 20261019). */
+  asked_by?: string;
 }
 
 export interface ListingOptions {
@@ -90,7 +92,18 @@ function closeWith(r: PendingRequest, o: ListingOptions, what: string): string {
 }
 
 function askSteps(r: PendingRequest, o: ListingOptions): string[] {
-  const lines = [pieceLine(r), `Sent: ${sentAt(r.created_at)}`, "Question:", cut(r.prompt.trim() || "(no question typed)", PROMPT_MAX, "question cut")];
+  const from = r.asked_by?.trim();
+  const lines = [
+    pieceLine(r),
+    `Sent: ${sentAt(r.created_at)}`,
+    from ? `Question from ${from}, someone the student shares their desk with (not the student):` : "Question:",
+    cut(r.prompt.trim() || "(no question typed)", PROMPT_MAX, "question cut"),
+  ];
+  if (from)
+    lines.push(
+      `Answer ${from}. They can read this essay, its notes and its history, but not the student's profile, academics or other conversations with you: ` +
+        "don't reveal those. And change nothing on the desk for them: no edits, suggestions, new pieces or profile changes.",
+    );
   if (r.selection.trim()) lines.push("The student highlighted this passage, so the question is about it:", ...fenced(r.selection));
   const read = pieceIncluded(r, o)
     ? "The piece, with its prompt, limit and the student's profile, is included below."

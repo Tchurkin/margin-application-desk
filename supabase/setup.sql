@@ -17,12 +17,12 @@ create table if not exists average_app.migrations (version text primary key, nam
 
 do $setup$
 declare
-  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes'];
+  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask'];
   marked text[];
   cli text[] := '{}';
   have boolean[];
   -- For each migration, the later ones that change some of the same things, and what.
-  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow","25":"function connector_counselor_poll","26":"function connector_counselor_poll"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check","25":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","26":"function connector_counselor_poll, function connector_counselor_removed, function connector_draft_answer and 1 more"},"11":{"12":"function connector_counselor_poll","25":"function connector_counselor_poll","26":"function connector_counselor_poll, function connector_counselor_removed"},"12":{"25":"function connector_counselor_poll","26":"function connector_counselor_poll"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"},"25":{"26":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request"}}';
+  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics","27":"function connector_requests"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow","25":"function connector_counselor_poll","26":"function connector_counselor_poll"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check","25":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","26":"function connector_counselor_poll, function connector_counselor_removed, function connector_draft_answer and 1 more"},"11":{"12":"function connector_counselor_poll","25":"function connector_counselor_poll","26":"function connector_counselor_poll, function connector_counselor_removed"},"12":{"25":"function connector_counselor_poll","26":"function connector_counselor_poll","27":"function connector_requests"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"},"25":{"26":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","27":"function connector_counselor_requests"}}';
   late boolean[] := '{}';
   blocked text;
   applied int := 0;
@@ -57,7 +57,8 @@ begin
     ('20261015000000' = any(marked)) or ('20261015000000' = any(cli)) or (to_regclass('public.profile_files') is not null),
     ('20261016000000' = any(marked)) or ('20261016000000' = any(cli)) or (coalesce(position('desk:' in pg_get_functiondef(to_regprocedure('public.can_use_piece_topic(text)'))) > 0, false)),
     ('20261017000000' = any(marked)) or ('20261017000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'desk_requests' and column_name = 'counselor_link')),
-    ('20261018000000' = any(marked)) or ('20261018000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'counselor_other_on'))
+    ('20261018000000' = any(marked)) or ('20261018000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'counselor_other_on')),
+    ('20261019000000' = any(marked)) or ('20261019000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'desk_requests' and column_name = 'asked_by'))
   ];
 
   for i in 1 .. array_length(names, 1) loop
@@ -3815,6 +3816,100 @@ $m20261018000000$;
     insert into average_app.migrations (version, name) values ('20261018000000', '20261018000000_counselor_computers_fixes');
     applied := applied + 1;
     raise notice 'Applied %', '20261018000000_counselor_computers_fixes' || case when late[26] then ' (it had been skipped)' else '' end;
+  end if;
+
+  if not have[27] then
+    execute $m20261019000000$
+-- The Ask chat on each essay, shared with the people the student shares the desk with.
+--
+-- Braxton's call (9/27/26): people the desk is shared with see the Ask chat on its essays, and
+-- those who can suggest or edit can ask in it while the student's counselor is on. The student's
+-- counselor answers on the student's computer, and everyone sees the same thread. Each question
+-- says who asked it. The Counselor page's chat, the profile interview, transcripts and odds stay
+-- the student's.
+
+alter table public.desk_requests
+  add column if not exists asked_by text not null default '' check (length(asked_by) <= 80),
+  add column if not exists asked_by_user uuid references auth.users (id) on delete set null;
+
+drop policy if exists "shared read the essay chat" on public.desk_requests;
+create policy "shared read the essay chat" on public.desk_requests
+  for select using (piece_id is not null and kind in ('ask', 'polish') and public.can_read_desk(desk_id));
+
+-- Whether the student's counselor is on right now (so a question would be answered).
+create or replace function public.desk_counselor_on(d uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.can_read_desk(d) and exists (
+    select 1 from public.connector_links o
+     where o.desk_id = d and o.revoked_at is null and o.counselor_at is not null
+       and not o.counselor_paused and not o.counselor_remove
+       and coalesce(greatest(o.counselor_at, o.last_used_at, o.activity_at), '-infinity') > now() - interval '2 minutes');
+$$;
+revoke all on function public.desk_counselor_on(uuid) from public, anon;
+grant execute on function public.desk_counselor_on(uuid) to authenticated;
+
+-- Someone the desk is shared with (who can suggest or edit) asks about one of its essays, while
+-- the counselor is on. At most 20 questions an hour each: the answers use the student's plan.
+create or replace function public.ask_on_shared_desk(piece uuid, question text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  d uuid := public.piece_desk(piece);
+  me uuid := auth.uid();
+  who text;
+  made public.desk_requests;
+begin
+  if d is null or me is null or not public.can_suggest_desk(d) then raise exception 'not allowed'; end if;
+  if length(trim(coalesce(question, ''))) = 0 then raise exception 'Type a question first.'; end if;
+  if not public.desk_counselor_on(d) then
+    raise exception 'The student''s counselor isn''t on right now, so nobody would answer. Try again once their computer is on.';
+  end if;
+  if (select count(*) from public.desk_requests where asked_by_user = me and created_at > now() - interval '1 hour') >= 20 then
+    raise exception 'That''s 20 questions this hour. Try again a little later.';
+  end if;
+  select display_name into who from public.desk_members where desk_id = d and user_id = me;
+  insert into public.desk_requests (desk_id, piece_id, kind, prompt, asked_by, asked_by_user)
+  values (d, piece, 'ask', left(trim(question), 4000), left(coalesce(nullif(trim(who), ''), 'Someone'), 80), me)
+  returning * into made;
+  return to_jsonb(made);
+end;
+$$;
+revoke all on function public.ask_on_shared_desk(uuid, text) from public, anon;
+grant execute on function public.ask_on_shared_desk(uuid, text) to authenticated;
+
+-- What the counselor (and a chat watching the desk) is handed says who asked.
+create or replace function public.connector_requests(token text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  l public.connector_links := public.connector_link(token);
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', r.id, 'kind', r.kind, 'piece_id', r.piece_id,
+      'piece_title', (select title from public.pieces where id = r.piece_id),
+      'prompt', r.prompt, 'selection', r.selection, 'created_at', r.created_at, 'model', r.model, 'asked_by', r.asked_by) order by r.created_at)
+    from public.desk_requests r
+    where r.desk_id = l.desk_id and r.status = 'pending'), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.connector_counselor_requests(token text)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  l public.connector_links := public.connector_link(token);
+begin
+  return coalesce((
+    select jsonb_agg(jsonb_build_object(
+      'id', r.id, 'kind', r.kind, 'piece_id', r.piece_id,
+      'piece_title', (select title from public.pieces where id = r.piece_id),
+      'prompt', r.prompt, 'selection', r.selection, 'created_at', r.created_at, 'model', r.model, 'asked_by', r.asked_by) order by r.created_at)
+    from public.desk_requests r
+    where r.desk_id = l.desk_id and r.status = 'pending' and r.counselor_link = l.id), '[]'::jsonb);
+end;
+$$;
+$m20261019000000$;
+    insert into average_app.migrations (version, name) values ('20261019000000', '20261019000000_shared_ask');
+    applied := applied + 1;
+    raise notice 'Applied %', '20261019000000_shared_ask' || case when late[27] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

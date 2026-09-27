@@ -61,7 +61,9 @@ export default function PrivacyPage() {
           People you share with: anyone you tell your desk&apos;s name and password (they open it from the home page), and anyone
           you give a link. They can read your colleges (with the odds and notes on them, and the reasoning behind the odds,
           which can mention your grades and scores), your essays, their notes and history, suggestions and your recommenders. Depending on what you choose, they can also suggest edits or make them. They
-          can&apos;t see your profile, your academics or your conversations with your counselor. You can remove anyone, and
+          can&apos;t see your profile, your academics or your conversations with your counselor, except the Ask chat on each essay:
+          they can read it, and ask in it if they can suggest or edit, while your counselor is on (it answers them on your Claude
+          plan, and changes nothing for them). You can remove anyone, and
           turning sharing off (or a link) cuts off everyone who came in that way, at once.
         </li>
         <li>An AI assistant, but only one you connect yourself (below).</li>

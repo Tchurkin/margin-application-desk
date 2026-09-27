@@ -7,6 +7,7 @@ import { ConfirmButton } from "@/components/confirm-button";
 import { subscribeDeskRequests } from "@/lib/bridge/live";
 import { parseOptions } from "@/lib/bridge/options";
 import {
+  ASKED_COLS,
   assistantLabel,
   bridgeMissing,
   queueRequest,
@@ -80,20 +81,24 @@ type Fetched = { ok: true; rows: DeskRequest[] } | { ok: false; phase: "missing"
  * The piece's thread, newest 100, oldest first. If a local or live change lands while the
  * fetch is out, the result may already be stale, so it asks again (twice at most).
  */
-async function fetchThread(supabase: SupabaseClient, pieceId: string, epoch: { current: number }): Promise<Fetched> {
-  for (let attempt = 0; ; attempt++) {
-    const started = epoch.current;
-    const { data, error } = await supabase
+export async function fetchThread(supabase: SupabaseClient, pieceId: string, epoch: { current: number }): Promise<Fetched> {
+  const query = (cols: string) =>
+    supabase
       .from("desk_requests")
-      .select(REQUEST_COLS)
+      .select(cols)
       .eq("piece_id", pieceId)
       .in("kind", THREAD_KINDS)
       .neq("status", "dismissed")
       .order("created_at", { ascending: false })
       .limit(THREAD_LIMIT);
+  for (let attempt = 0; ; attempt++) {
+    const started = epoch.current;
+    let { data, error } = await query(REQUEST_COLS + ASKED_COLS);
+    // A database before migration 20261019 has no asked_by: then everything was the student's.
+    if (error && (error.code === "42703" || error.code === "PGRST204")) ({ data, error } = await query(REQUEST_COLS));
     if (epoch.current !== started && attempt < 2) continue;
     if (error) return { ok: false, phase: bridgeMissing(error) ? "missing" : "error" };
-    return { ok: true, rows: sortThread((data ?? []) as DeskRequest[], pieceId) };
+    return { ok: true, rows: sortThread((data ?? []) as unknown as DeskRequest[], pieceId) };
   }
 }
 
@@ -414,6 +419,7 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
               <RequestItem
                 key={r.id}
                 r={r}
+                viewer="owner"
                 now={now}
                 waitingFor={label}
                 doing={r.status === "pending" ? activityOn(connectors, r.id, now) : null}
@@ -509,8 +515,14 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
   );
 }
 
-function RequestItem({
+/**
+ * One question and its answer. The student sees who asked each ("You", or the name of someone
+ * they share the desk with) and can dismiss it and show rewrites in the essay; someone the desk
+ * is shared with reads it.
+ */
+export function RequestItem({
   r,
+  viewer,
   now,
   waitingFor,
   doing,
@@ -520,10 +532,11 @@ function RequestItem({
   onShow,
 }: {
   r: DeskRequest;
+  viewer: "owner" | "guest";
   now: number;
   waitingFor: string;
   doing: string | null;
-  onDismiss: () => void;
+  onDismiss?: () => void;
   /** The version showing in the essay, if it's one of this request's. */
   showing: number | null;
   /** The version kept, if one was. */
@@ -534,21 +547,24 @@ function RequestItem({
   const answered = whenLabel(r.answered_at, now);
   const question = r.prompt || (r.kind === "polish" ? "Make this better." : "");
   const { options, note } = r.kind === "polish" ? parseOptions(r.answer) : { options: [], note: r.answer };
+  const who = r.asked_by?.trim() || (viewer === "owner" ? "You" : "The student");
   return (
     <li data-testid="request" className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[11px] tracking-wide text-muted uppercase">
-          {r.kind === "polish" ? "You · Rewrite" : "You"}
+        <span className="font-mono text-[11px] tracking-wide text-muted uppercase" data-testid="asked-by">
+          {r.kind === "polish" ? `${who} · Rewrite` : who}
           {asked && ` · ${asked}`}
         </span>
-        <button
-          type="button"
-          className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
-          aria-label={r.status === "pending" ? "Dismiss (withdraw it)" : "Dismiss"}
-          onClick={onDismiss}
-        >
-          Dismiss
-        </button>
+        {onDismiss && (
+          <button
+            type="button"
+            className="text-xs text-muted underline-offset-2 hover:text-ink hover:underline"
+            aria-label={r.status === "pending" ? "Dismiss (withdraw it)" : "Dismiss"}
+            onClick={onDismiss}
+          >
+            Dismiss
+          </button>
+        )}
       </div>
       {r.selection && (
         <blockquote className="border-l-2 border-warn bg-warn-soft px-2 py-1 text-xs break-words" aria-label="Highlighted passage">
@@ -575,7 +591,7 @@ function RequestItem({
                 >
                   <p className="break-words whitespace-pre-wrap">{o}</p>
                   <p className="mt-1 flex flex-wrap gap-3 text-xs text-muted">
-                    {kept === i ? (
+                    {viewer === "guest" ? null : kept === i ? (
                       <span>Kept in your essay</span>
                     ) : showing === i ? (
                       <span>Showing in your essay: Enter keeps it</span>

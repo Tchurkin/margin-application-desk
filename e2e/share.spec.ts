@@ -193,14 +193,14 @@ test("people it's shared with have the Board, Write and Strategy, and nothing of
   for (const name of ["Board", "Write", "Strategy"]) await expect(nav.getByRole("link", { name, exact: true })).toBeVisible();
   for (const name of ["Profile", "Counselor", "Settings"]) await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
 
-  // Write opens the piece to work on, in the workspace: the rail and history, but no asking the counselor.
+  // Write opens the piece to work on, in the workspace: the rail, the history, and the essay's Ask chat.
   await nav.getByRole("link", { name: "Write", exact: true }).click();
   await expect(guest).toHaveURL(/\/shared\/[^/]+\/piece\//);
   await expectEssay(guest, "Hello from Testy.");
   const tools = guest.getByRole("toolbar", { name: "Tools" });
   await expect(tools.getByRole("button", { name: "Files" })).toBeVisible();
   await expect(tools.getByRole("button", { name: "History" })).toBeVisible();
-  await expect(tools.getByRole("button", { name: "Ask" })).toHaveCount(0);
+  await expect(tools.getByRole("button", { name: "Ask" })).toBeVisible();
   await expect(guest.getByRole("button", { name: /Delete “/ })).toHaveCount(0);
   await expect(guest.getByRole("button", { name: /Add a piece/ })).toHaveCount(0);
   // The Files panel starts open: the rail, and tabs that stay on the shared desk.
@@ -241,6 +241,59 @@ test("the Files panel shows where everyone on the desk is", async ({ page, brows
   // And she's gone when she closes the desk.
   await mom.close();
   await expect(rail.getByRole("treeitem", { name: /^Second essay,/ })).not.toHaveAccessibleName(/is here/, { timeout: 20_000 });
+});
+
+test("people the desk is shared with see the essay's Ask chat, and ask in it while the counselor is on", async ({ page, browser, request }) => {
+  await studentWith(page, "askshare", "My essay about robots.");
+  const pieceUrl = page.url();
+  // The student's counselor: a connector link that checks in the way the counselor on their computer does.
+  await page.goto("/desk/settings/connectors");
+  await page.getByLabel("Assistant").selectOption("Claude");
+  await page.getByRole("button", { name: "Make a connector link" }).click();
+  const token = (await page.getByRole("textbox", { name: "Connector link" }).inputValue()).split("/api/mcp/")[1];
+  const api = apiClient();
+  const checkIn = async () => {
+    const { data, error } = await api.rpc("connector_counselor_poll", { token, version: "4", computer: "TESTY-PC", machine: "e2e-askshare" });
+    if (error) throw new Error(error.message);
+    return data as { fresh: number };
+  };
+
+  const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");
+  await openShared(mom, "Shared essay");
+  const tools = mom.getByRole("toolbar", { name: "Tools" });
+  await tools.getByRole("button", { name: "Ask" }).click();
+  const panel = mom.getByTestId("shared-ask-panel");
+  // Off: she can read, not ask.
+  await expect(panel.getByTestId("counselor-on")).toHaveText("The student's counselor is off right now.");
+  await expect(panel.getByRole("button", { name: "Send" })).toBeDisabled();
+
+  // On (the panel looks again every 15 seconds): she asks, as herself.
+  await checkIn();
+  await expect(panel.getByTestId("counselor-on")).toHaveText("The student's counselor is on.", { timeout: 25_000 });
+  await panel.getByLabel("Ask about this piece").fill("Is the ending too abrupt?");
+  await panel.getByRole("button", { name: "Send" }).click();
+  await expect(panel.getByTestId("request")).toHaveCount(1);
+  await expect(panel.getByTestId("asked-by")).toContainText("Mom Testy");
+
+  // The counselor takes it, is told who asked, and answers; both of them see it.
+  await expect.poll(async () => (await checkIn()).fresh).toBe(1);
+  const work = (await (await request.get(`/api/counselor/${token}`)).json()) as { requests: { id: string; text: string }[] };
+  expect(work.requests[0].text).toContain("Question from Mom Testy");
+  expect(work.requests[0].text).toContain("change nothing on the desk for them");
+  expect((await api.rpc("connector_finish_request", { token, request: work.requests[0].id, answer_text: "It lands, but add one more beat." })).data).toBe(true);
+  await expect(panel).toContainText("It lands, but add one more beat.");
+  await page.goto(pieceUrl);
+  await page.getByRole("toolbar", { name: "Tools" }).getByRole("button", { name: "Ask" }).click();
+  const mine = page.getByTestId("ask-panel");
+  await expect(mine.getByTestId("asked-by")).toContainText("Mom Testy");
+  await expect(mine).toContainText("It lands, but add one more beat.");
+
+  // Someone who can only read follows along.
+  const grandpa = await join(browser, await makeLink(page, { role: "view", label: "Grandpa" }), "Grandpa");
+  await openShared(grandpa, "Shared essay");
+  await grandpa.getByRole("toolbar", { name: "Tools" }).getByRole("button", { name: "Ask" }).click();
+  await expect(grandpa.getByTestId("shared-ask-panel")).toContainText("It lands, but add one more beat.");
+  await expect(grandpa.getByTestId("shared-ask-panel")).toContainText("You can read along here.");
 });
 
 test("read-only links can't change anything", async ({ page, browser }) => {
