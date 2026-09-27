@@ -69,7 +69,7 @@ export function WatchStatus({ connectors, now }: { connectors: Connector[] | nul
           {counselor ? (doing ? `Your counselor is ${doing}…` : "Your counselor is on and watching your desk: ask away.") : `${w.label} is ${doing ?? "watching your desk: ask away"}${doing ? "…" : "."}`}
           {counselor && isOutdated(w) && (
             <Link href="/desk/settings/counselor" className={link}>
-              Update it for faster answers
+              An update is ready
             </Link>
           )}
         </>

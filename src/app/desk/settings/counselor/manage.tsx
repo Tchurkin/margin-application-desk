@@ -8,7 +8,7 @@ import { revokeConnectorLink, setCounselorPaused, setCounselorRemove, updateCoun
 import { timeOf, whenLabel } from "@/lib/bridge/thread";
 import { useNow } from "@/lib/bridge/use-now";
 import { activityText, counselors, isCounselor, pendingReplacement, type Connector } from "@/lib/bridge/watchers";
-import { downloadInstaller } from "@/lib/counselor/download";
+import { downloadInstaller, macSetupCommand } from "@/lib/counselor/download";
 import { asEssayAccess } from "@/lib/domain/share";
 import { ConnectorPermissions } from "../connector-creator";
 import { CounselorSetup, InstallSteps, usePlatform } from "../counselor-setup";
@@ -85,6 +85,8 @@ function CounselorCard({
   const here = platform === theirs ? theirs : null;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // A Mac update's line to paste into Terminal (only while this page is open: it holds the new link).
+  const [macLine, setMacLine] = useState<string | null>(null);
 
   const run = async (f: () => Promise<unknown>) => {
     setBusy(true);
@@ -107,6 +109,8 @@ function CounselorCard({
   // A database without migration 20261002: no pause or removal to offer yet.
   const legacy = c.counselor_version === undefined;
   const outdated = isOutdated(c);
+  // Counselors from version 2 on delete themselves when asked; version 1 can't.
+  const selfRemoves = !legacy && Number((c.counselor_version ?? "").split("-")[0]) >= 2;
   const disconnect = () => run(() => revokeConnectorLink(id));
 
   return (
@@ -131,10 +135,10 @@ function CounselorCard({
       {pending ? (
         <div className="flex flex-col gap-2 text-sm" data-testid="counselor-update-pending">
           <p>
-            Update downloaded. Run the file on the computer your counselor runs on; this one keeps answering until the new one starts,
-            and the new one carries on the same conversation.
+            {theirs === "mac" ? "Update ready. Run it" : "Update downloaded. Run the file"} on the computer this counselor runs on;
+            this one keeps answering until the new one starts, and the new one carries on the same conversation.
           </p>
-          <InstallSteps platform={theirs} />
+          <InstallSteps platform={theirs} command={theirs === "mac" ? (macLine ?? undefined) : undefined} />
           <div>
             <button type="button" className="btn" disabled={busy} onClick={() => void run(() => revokeConnectorLink(pending.id!))}>
               Cancel the update
@@ -157,7 +161,8 @@ function CounselorCard({
                   if (!here) return;
                   const r = await updateCounselorLink(id);
                   if (r.error || !r.token) throw new Error(r.error ?? "No link was made.");
-                  await downloadInstaller(r.token, here);
+                  if (here === "mac") setMacLine(macSetupCommand(r.token));
+                  else downloadInstaller(r.token);
                 })
               }
             >
@@ -196,7 +201,7 @@ function CounselorCard({
               {paused ? "Resume" : "Pause"}
             </button>
           )}
-          {legacy || outdated ? (
+          {!selfRemoves ? (
             <ConfirmButton
               label="Turn off"
               confirmLabel="Turn off"

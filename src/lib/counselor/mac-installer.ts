@@ -69,6 +69,7 @@ my $Machine = '';
 }
 # A database from before migration 20261017 doesn't take them: then it checks in without.
 my $SaysComputer = 1;
+my $AskComputerAt = 0;
 my $LogFile = "$Dir/counselor.log";
 my $SessionFile = "$Dir/session.txt";
 my $Mcp = "$Dir/mcp.json";
@@ -176,7 +177,7 @@ sub retry_unposted {
 my ($Pid, $CIn, $COut, $CErr, $Sel);
 my ($ProcModel, $ProcEffort, $Switching, $SwitchSeq, $Resumed) = ('', '', undef, 0, 0);
 my ($OutBuf, $ErrBuf, $OutDone, $ExitStatus) = ('', '', 0, undef);
-my (@ErrTail, @Queue, %Seen);
+my (@ErrTail, @Queue);
 my ($FetchFails, $StartFails, $NextStart) = (0, 0, 0);
 my $Current;
 my $LastUsed = time;
@@ -443,8 +444,11 @@ sub fetch_work {
     Log("Could not fetch the requests: HTTP $code " . substr(defined $text ? $text : '', 0, 300));
     return;
   }
+  # Skip only what's in hand here: one that went to another computer and came back is taken again.
+  my %busy = map { ("$_->{id}" => 1) } @Queue, @Unposted;
+  $busy{"$Current->{id}"} = 1 if $Current;
   for my $q (@{ ref $r->{requests} eq 'ARRAY' ? $r->{requests} : [] }) {
-    next if ref $q ne 'HASH' || !defined $q->{id} || $Seen{$q->{id}}++;
+    next if ref $q ne 'HASH' || !defined $q->{id} || $busy{"$q->{id}"}++;
     my $m = defined $q->{model} ? "$q->{model}" : '';
     $m = '' unless $Models{$m};
     push @Queue, { id => $q->{id}, text => (defined $q->{text} ? "$q->{text}" : ''), model => $m, tries => 0, at => time };
@@ -533,13 +537,16 @@ while (1) {
   if ($now - $LastPoll >= $interval) {
     $LastPoll = $now;
     # "-mac": the website tells a Mac counselor from a Windows one (to offer the right update).
+    $SaysComputer = 1 if !$SaysComputer && $now >= $AskComputerAt;
     my %poll = (token => $Cfg->{token}, version => "$Version-mac");
     @poll{qw(computer machine)} = ($Computer, $Machine) if $SaysComputer;
     my $r = eval { rpc('connector_counselor_poll', \%poll) };
     my $err = $@;
     if ($err && $SaysComputer && $err =~ /PGRST202/) {
+      # Tried again now and then: the database may get its update.
       $SaysComputer = 0;
-      Log("The desk is a database update behind: checking in without this computer's name.");
+      $AskComputerAt = $now + 1800;
+      Log("The desk is a database update behind: checking in without this computer's name for now.");
     } elsif ($err) {
       if (revoked($err)) {
         Log('Its connector link was revoked, so the counselor is turning itself off.');
@@ -570,6 +577,13 @@ while (1) {
             splice(@Queue, $k, 1);
             Log('Dropped a request that was withdrawn.');
           }
+        }
+        # The one being answered was withdrawn, or went to another computer while this one slept.
+        if ($Current && $Current->{started} < $now && !$open{"$Current->{id}"}) {
+          Log('Stopped a request that was withdrawn or went to another computer.');
+          $Current = undef;
+          stop_claude(0);
+          activity('idle');
         }
       }
       # Something is waiting that nothing here is working on: look again now and then.
@@ -632,9 +646,9 @@ echo "The Average App counselor is off. Run the setup from the Counselor page ag
 
 /** The setup script itself. Placeholders are filled in by macInstaller. */
 const SETUP = String.raw`#!/bin/bash
-# Average App counselor setup for Mac. Double-click to install; your Mac asks once, in
-# System Settings > Privacy & Security > Open Anyway. This file was written for you by the
-# website: it sets up Claude Code as your counselor, running in the background on your own Claude
+# Average App counselor setup for Mac, run by the line Settings > Counselor gives you to paste
+# into Terminal (or, saved as a .command file and double-clicked, once allowed in System Settings >
+# Privacy & Security > Open Anyway). It was written for you by the website: it sets up Claude Code as your counselor, running in the background on your own Claude
 # plan. Without Claude Code it offers to install it (Anthropic's own installer, no password) and,
 # not signed in, opens your browser to sign in. Nothing else comes from the internet.
 SITE='__SITE__'

@@ -69,8 +69,13 @@ function SetupCard() {
       <h2 id="counselor-setup-h" className="font-serif text-xl">
         Set up your counselor
       </h2>
+      <p className="rounded-md border border-line bg-bg px-3 py-2 text-sm">
+        <span className="font-medium">Why a download?</span> Asking Claude through Anthropic&apos;s API is paid by the answer and
+        costs far more than your Claude plan. The counselor is a small workaround that lets Claude Code, which comes with your
+        plan, answer here instead, on your own computer.
+      </p>
       <p className="text-sm text-muted">
-        One download, for Windows or Mac, makes Claude Code on this computer your counselor: it answers everything you ask on your desk,
+        One download on Windows, or one line in Terminal on a Mac, makes Claude Code on this computer your counselor: it answers everything you ask on your desk,
         hidden, on your own Claude plan (Pro or Max). No Claude Code yet? The setup installs it and has you sign in once. Choose what it may
         do in{" "}
         <Link href="/desk/settings/counselor" className="underline underline-offset-2">

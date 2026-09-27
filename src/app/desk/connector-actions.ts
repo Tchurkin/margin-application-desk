@@ -72,10 +72,24 @@ export async function createConnectorLink(_prev: ConnectorState, f: FormData): P
 
 /** A link for the counselor on this computer (its installer carries the token). */
 export async function createCounselorLink(essays: EssayAccess, manage: boolean, speed: CounselorSpeed = "balanced"): Promise<ConnectorState> {
+  const { supabase, desk } = await requireDesk();
+  // Another computer: the same model and effort as the counselor already on the desk (a database
+  // before migration 20261004 has none to copy).
+  const { data: other } = await supabase
+    .from("connector_links")
+    .select("counselor_model, counselor_effort, counselor_speed")
+    .eq("desk_id", desk.id)
+    .is("revoked_at", null)
+    .not("counselor_at", "is", null)
+    .order("counselor_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
   const { token, label, error } = await makeLink("Claude", {
     essay_access: asEssayAccess(essays),
     can_manage: !!manage,
-    counselor_speed: asSpeed(speed),
+    counselor_speed: asSpeed(other?.counselor_speed ?? speed),
+    ...(isModel(other?.counselor_model) ? { counselor_model: other.counselor_model } : {}),
+    ...(isEffort(other?.counselor_effort) ? { counselor_effort: other.counselor_effort } : {}),
   });
   return error ? { error } : { token, label };
 }

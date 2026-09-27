@@ -1,9 +1,8 @@
 "use client";
 import { useState, useSyncExternalStore } from "react";
-import { downloadInstaller, type InstallerPlatform } from "@/lib/counselor/download";
+import { downloadInstaller, macSetupCommand, type InstallerPlatform } from "@/lib/counselor/download";
 import { WATCH_PHRASE } from "@/lib/bridge/watchers";
 import { INSTALLER_NAME } from "@/lib/counselor/installer";
-import { MAC_INSTALLER_NAME, MAC_ZIP_NAME } from "@/lib/counselor/mac-installer";
 import type { EssayAccess } from "@/lib/domain/share";
 import { createCounselorLink } from "../connector-actions";
 import { PermissionFields } from "./connector-creator";
@@ -28,28 +27,54 @@ export function usePlatform(): Platform | null {
 }
 
 /** What to do with the downloaded file. */
-export function InstallSteps({ platform }: { platform: InstallerPlatform }) {
+/** The line to paste into Terminal, with a button that copies it. */
+function SetupLine({ command }: { command: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="mt-1.5 flex gap-2">
+      <input className="field font-mono text-xs" readOnly value={command} aria-label="Setup line" onFocus={(e) => e.target.select()} />
+      <button
+        type="button"
+        className="btn"
+        onClick={async () => {
+          await navigator.clipboard.writeText(command);
+          setCopied(true);
+        }}
+      >
+        {copied ? "Copied" : "Copy"}
+      </button>
+    </div>
+  );
+}
+
+/**
+ * How to run the setup: on a Mac, the line to paste into Terminal (without it, after the page
+ * was reloaded, how to get it again); on Windows, the downloaded file.
+ */
+export function InstallSteps({ platform, command }: { platform: InstallerPlatform; command?: string }) {
   if (platform === "mac") {
     return (
       <ol className="list-decimal rounded-md border border-accent bg-accent-soft py-3 pr-3 pl-8 text-sm" data-testid="counselor-steps">
         <li>
-          In your Downloads folder, double-click <span className="font-medium">{MAC_INSTALLER_NAME}</span>. (If you see{" "}
-          <span className="font-medium">{MAC_ZIP_NAME}</span> instead, double-click that first.)
-        </li>
-        <li>Your Mac says it can&apos;t open it. That&apos;s expected: click Done or Cancel (not Move to Trash).</li>
-        <li>
-          Open System Settings → Privacy & Security and scroll down to where it says the file was blocked. Click Open Anyway, then
-          Open Anyway (or Open) in the box that appears, and enter your Mac&apos;s password if it asks. (It&apos;s a script this site
-          wrote for you.)
+          Open Terminal: press ⌘ Space, type <span className="font-medium">Terminal</span>, and press Return.
         </li>
         <li>
-          A Terminal window sets everything up by itself, with nothing to type. If Claude Code isn&apos;t on your Mac yet, it asks to
-          install it (a minute or two), then opens your browser so you can sign in to Claude: sign in and click Authorize.
+          {command ? (
+            <>
+              Copy this line, paste it into Terminal (⌘ V) and press Return:
+              <SetupLine command={command} />
+            </>
+          ) : (
+            <>Paste the line you copied and press Return. (Lost it? Cancel below and start again for a new one.)</>
+          )}
+        </li>
+        <li>
+          It sets everything up by itself, with nothing more to type. If Claude Code isn&apos;t on your Mac yet, it asks to install
+          it (a minute or two), then opens your browser so you can sign in to Claude: sign in and click Authorize.
         </li>
         <li>
           Wait for “Your counselor is on.” If your Mac says Background Items Added, that&apos;s your counselor: leave it on.
         </li>
-        <li>That&apos;s it. Ask anything on your desk and the answer shows up there, now and every time you log in.</li>
       </ol>
     );
   }
@@ -69,10 +94,11 @@ export function InstallSteps({ platform }: { platform: InstallerPlatform }) {
   );
 }
 
-const LABEL: Record<InstallerPlatform, string> = { windows: "Download the counselor for Windows", mac: "Download the counselor for Mac" };
+const LABEL: Record<InstallerPlatform, string> = { windows: "Download the counselor for Windows", mac: "Set up the counselor on this Mac" };
 
 /**
- * Set up Claude Code on this computer as the student's counselor: one download, run once. See
+ * Set up Claude Code on this computer as the student's counselor: one download on Windows, one
+ * line in Terminal on a Mac, run once. See
  * src/lib/counselor/installer.ts (Windows) and mac-installer.ts for what the file does.
  */
 export function CounselorSetup({ withPermissions = true }: { withPermissions?: boolean }) {
@@ -81,7 +107,7 @@ export function CounselorSetup({ withPermissions = true }: { withPermissions?: b
   const [manage, setManage] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<InstallerPlatform | null>(null);
+  const [done, setDone] = useState<{ platform: InstallerPlatform; command?: string } | null>(null);
   // This computer's installer; on anything else (or before the page knows), both.
   const offered: InstallerPlatform[] = platform === "windows" || platform === "mac" ? [platform] : ["windows", "mac"];
 
@@ -91,8 +117,11 @@ export function CounselorSetup({ withPermissions = true }: { withPermissions?: b
     try {
       const r = await createCounselorLink(essays, manage);
       if (r.error || !r.token) throw new Error(r.error ?? "No link was made.");
-      await downloadInstaller(r.token, target);
-      setDone(target);
+      if (target === "mac") setDone({ platform: "mac", command: macSetupCommand(r.token) });
+      else {
+        downloadInstaller(r.token);
+        setDone({ platform: "windows" });
+      }
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -118,7 +147,7 @@ export function CounselorSetup({ withPermissions = true }: { withPermissions?: b
         )}
       </div>
       {error && <p className="rounded-md bg-danger-soft px-3 py-2 text-sm text-danger">{error}</p>}
-      {done && <InstallSteps platform={done} />}
+      {done && <InstallSteps platform={done.platform} command={done.command} />}
     </div>
   );
 }

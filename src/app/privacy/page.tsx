@@ -80,7 +80,7 @@ export default function PrivacyPage() {
           with everything allowed; you can change that when you make one or at any time. You can turn a link off whenever you like.
         </li>
         <li>
-          <strong>The counselor.</strong> A setup file for Windows or Mac that runs Claude Code, on your own Claude account, on your own
+          <strong>The counselor.</strong> A setup for Windows (a file) or Mac (a line for Terminal) that runs Claude Code, on your own Claude account, on your own
           computer. If Claude Code isn&apos;t there yet, the setup installs it from Anthropic, with your OK, and you sign in to it with
           your Claude account. You can run it on several computers; each tells the site its computer&apos;s name (shown to you
           in Settings) and a scrambled id that tells your computers apart. It keeps its settings (including its connector link) and a log in a folder on your computer, and Claude Code

@@ -83,6 +83,7 @@ try {
 } catch { }
 # A database from before migration 20261017 doesn't take them: then it checks in without.
 $SaysComputer = $true
+$AskComputerAt = [datetime]::MinValue
 $Dir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Cfg = [IO.File]::ReadAllText((Join-Path $Dir 'config.json')) | ConvertFrom-Json
 $LogFile = Join-Path $Dir 'counselor.log'
@@ -160,7 +161,6 @@ $script:Err = $null
 $script:ErrTail = New-Object System.Collections.Queue
 $script:Queue = New-Object System.Collections.ArrayList
 $script:Unposted = New-Object System.Collections.ArrayList
-$script:Seen = @{}
 $script:FetchFails = 0
 $script:StartFails = 0
 $script:NextStart = [datetime]::MinValue
@@ -374,9 +374,14 @@ function Fetch-Work {
   $script:LastFetch = Get-Date
   try {
     $r = Invoke-RestMethod -Method Get -Uri $WorkUrl -TimeoutSec 40
+    # Skip only what's in hand here: one that went to another computer and came back is taken again.
+    $busy = @{}
+    foreach ($x in @($script:Queue)) { $busy[[string]$x.id] = $true }
+    foreach ($x in @($script:Unposted)) { $busy[[string]$x.id] = $true }
+    if ($script:Current) { $busy[[string]$script:Current.id] = $true }
     foreach ($q in $r.requests) {
-      if ($script:Seen.ContainsKey($q.id)) { continue }
-      $script:Seen[$q.id] = $true
+      if ($busy.ContainsKey([string]$q.id)) { continue }
+      $busy[[string]$q.id] = $true
       $m = [string]$q.model
       if ($Models -notcontains $m) { $m = '' }
       [void]$script:Queue.Add(@{ id = $q.id; text = [string]$q.text; model = $m; tries = 0; at = Get-Date })
@@ -451,6 +456,7 @@ while ($true) {
   if (($now - $LastPoll).TotalSeconds -ge $interval) {
     $LastPoll = $now
     try {
+      if (-not $SaysComputer -and $now -ge $AskComputerAt) { $SaysComputer = $true }
       $pollArgs = @{ token = $Cfg.token; version = $Version }
       if ($SaysComputer) { $pollArgs.computer = $Computer; $pollArgs.machine = $Machine }
       $r = Rpc 'connector_counselor_poll' $pollArgs
@@ -474,6 +480,14 @@ while ($true) {
             Log 'Dropped a request that was withdrawn.'
           }
         }
+        # The one being answered was withdrawn, or went to another computer while this one slept.
+        $c = $script:Current
+        if ($c -and $c.started -lt $now -and -not $open.ContainsKey([string]$c.id)) {
+          Log 'Stopped a request that was withdrawn or went to another computer.'
+          $script:Current = $null
+          Stop-Claude $false
+          Activity 'idle'
+        }
       }
       # Something is waiting that nothing here is working on: look again now and then.
       if ($Waiting -gt 0 -and -not $script:Current -and $script:Queue.Count -eq 0 -and ($now - $script:LastFetch).TotalSeconds -gt 60) { $script:NeedFetch = $true }
@@ -481,8 +495,10 @@ while ($true) {
       $detail = ''
       if ($_.ErrorDetails) { $detail = $_.ErrorDetails.Message }
       if ($SaysComputer -and $detail -like '*PGRST202*') {
+        # Tried again now and then: the database may get its update.
         $SaysComputer = $false
-        Log 'The desk is a database update behind: checking in without this computer''s name.'
+        $AskComputerAt = $now.AddMinutes(30)
+        Log 'The desk is a database update behind: checking in without this computer''s name for now.'
         continue
       }
       if ($detail -like '*not valid*') {

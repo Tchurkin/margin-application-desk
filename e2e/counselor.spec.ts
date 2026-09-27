@@ -1,7 +1,6 @@
 import { readFileSync } from "node:fs";
 import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
 import { expect, test, type Page } from "@playwright/test";
-import { strFromU8, unzipSync } from "fflate";
 import { COUNSELOR_VERSION } from "../src/lib/counselor/version";
 import { addCollege, addPiece, apiClient, signUp, studentClient } from "./helpers";
 
@@ -169,23 +168,29 @@ test.describe("on a Windows computer", () => {
 test.describe("on a Mac", () => {
   test.use({ userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15" });
 
-  test("the counselor downloads as a zip holding its setup, with the Mac's steps", async ({ page }) => {
+  test("the counselor sets up from one line in Terminal (nothing downloaded for macOS to hold back)", async ({ page, request }) => {
     await signUp(page, "maccounselor");
     await page.goto(SETTINGS);
-    // Once the setup is on the page: only the Mac's download is offered.
-    const mac = page.getByRole("button", { name: "Download the counselor for Mac" });
+    // Once the setup is on the page: only the Mac's way is offered.
+    const mac = page.getByRole("button", { name: "Set up the counselor on this Mac" });
     await expect(mac).toBeVisible();
     await expect(page.getByRole("button", { name: "Download the counselor for Windows" })).toHaveCount(0);
-    const [download] = await Promise.all([page.waitForEvent("download"), mac.click()]);
-    expect(download.suggestedFilename()).toBe("Average App counselor setup.zip");
-    const files = unzipSync(new Uint8Array(readFileSync((await download.path())!)));
-    expect(Object.keys(files)).toEqual(["Average App counselor setup.command"]);
-    const script = strFromU8(files["Average App counselor setup.command"]);
+    await mac.click();
+    const steps = page.getByTestId("counselor-steps");
+    await expect(steps).toContainText("Open Terminal");
+    await expect(steps).not.toContainText("Open Anyway");
+    const line = await steps.getByLabel("Setup line").inputValue();
+    // bash -c, so what the setup asks (signing in) reads the keyboard, not the script.
+    const url = line.match(/^\/bin\/bash -c "\$\(curl -fsSL '([^']+)'\)"$/)![1];
+    expect(url).toMatch(/\/api\/counselor\/[A-Za-z0-9_-]+\/setup$/);
+    const script = await (await request.get(url)).text();
     expect(script.startsWith("#!/bin/bash\n")).toBe(true);
     // The link inside is a live counselor link: the watcher's first check-in works.
     const token = script.match(/^TOKEN='([A-Za-z0-9_-]+)'$/m)![1];
+    expect(url).toContain(token);
     expect(await counselorApi(token).poll()).toMatchObject({ fresh: 0, paused: false, remove: false });
-    await expect(page.getByTestId("counselor-steps")).toContainText("Open Anyway");
+    // A made-up link gets a plain message, not a setup.
+    expect((await request.get(url.replace(token, "not a token"))).status()).toBe(404);
   });
 });
 
@@ -260,9 +265,8 @@ test("the counselor on two computers: each question goes to one of them, and Set
   await chat(page).getByRole("button", { name: "What should I work on this week?" }).click();
   await expect(chat(page)).toContainText("What should I work on this week?");
 
-  // The first to check in takes it; the other never sees it.
-  const first = await checkIn(one, COUNSELOR_VERSION, "TESTY-DESKTOP", "e2e-machine-one");
-  expect(first.fresh).toBe(1);
+  // The first to check in takes it (once it's on the desk); the other never sees it.
+  await expect.poll(async () => (await checkIn(one, COUNSELOR_VERSION, "TESTY-DESKTOP", "e2e-machine-one")).fresh).toBe(1);
   const second = await checkIn(two, `${COUNSELOR_VERSION}-mac`, "Testy's MacBook", "e2e-machine-two");
   expect(second).toMatchObject({ fresh: 0, waiting: 0, pending: [] });
   const workOne = (await (await request.get(`/api/counselor/${tokenOne}`)).json()) as { requests: { id: string }[] };
