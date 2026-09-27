@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -315,10 +315,12 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
     expect(alone).toHaveLength(1);
     expect(alone[0].argv).toEqual(expect.arrayContaining(["-p", "--tools", "", "--strict-mcp-config", "--no-session-persistence", "--model", "sonnet"]));
     for (const flag of ["--resume", "--session-id", "--mcp-config", "--allowedTools", "stream-json"]) expect(alone[0].argv).not.toContain(flag);
-    expect(alone[0].argv).toEqual(expect.arrayContaining(["--settings", join(dir, "alone", "settings.json")]));
+    // The watcher knows its folder by its real path (on macOS /var is /private/var).
+    expect(alone[0].argv).toEqual(expect.arrayContaining(["--settings", join(realpathSync(dir), "alone", "settings.json")]));
     // Away from the counselor's CLAUDE.md, and with none loaded.
     const run = claudeCalls().find((c) => c.alone?.includes("for Mom, Café ✓"));
     expect(run?.mds).toBe("1");
+    expect(run?.cwd?.startsWith(realpathSync(dir))).toBe(false);
     expect(run?.cwd?.startsWith(dir)).toBe(false);
     expect(claudeCalls().some((c) => c.asked?.includes("for Mom"))).toBe(false);
     expect(desk.calls("connector_activity", "g1").map((e) => e.args?.tool)).toContain("thinking");
