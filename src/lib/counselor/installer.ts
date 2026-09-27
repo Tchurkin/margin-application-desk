@@ -2,8 +2,10 @@
  * The counselor for Windows: one file the student downloads and double-clicks, once. (The Mac
  * version, which works the same way, is mac-installer.ts.)
  *
- * It sets up Claude Code, which the student already has and is signed in to, as their
- * counselor, running hidden on their own computer on their own Claude plan:
+ * It sets up Claude Code as their counselor, running hidden on their own computer on their own
+ * Claude plan. Without Claude Code it offers to install it (Anthropic's own installer, no admin
+ * needed) and, not signed in, opens the browser to sign in: nothing to type anywhere.
+ * - Braxton's call (9/27/26): students shouldn't have to use a terminal to get Claude Code.
  * - a small watcher (PowerShell, no window) asks the desk every couple of seconds whether
  *   anything new was asked on the website. Waiting costs nothing: Claude isn't involved.
  * - when something arrives, it fetches the request with what answering it needs (the essay, the
@@ -206,10 +208,11 @@ function Start-Claude($model, $effort) {
     $script:StartFails++
     $script:NextStart = (Get-Date).AddSeconds([Math]::Min(300, 5 * $script:StartFails))
     Log ('Could not start Claude Code: ' + $_.Exception.Message)
-    # It may have moved (reinstalled another way): look for it again.
-    $found = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($found) { $Cfg.claude = $found.Source }
-    elseif (Test-Path (Join-Path $env:USERPROFILE '.local\bin\claude.exe')) { $Cfg.claude = Join-Path $env:USERPROFILE '.local\bin\claude.exe' }
+    # It may have moved (reinstalled another way): look for it again. (A "claude" under WindowsApps
+    # is Claude Desktop's shortcut, which would open the Desktop app.)
+    $found = Get-Command claude -All -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Source -notlike '*\WindowsApps\*' } | Select-Object -First 1
+    if (Test-Path (Join-Path $env:USERPROFILE '.local\bin\claude.exe')) { $Cfg.claude = Join-Path $env:USERPROFILE '.local\bin\claude.exe' }
+    elseif ($found) { $Cfg.claude = $found.Source }
     if ($script:StartFails -ge 3) {
       foreach ($q in @($script:Queue)) {
         Finish $q.id "Your counselor couldn't start Claude Code on your computer. Run the counselor setup again from the Counselor page."
@@ -547,20 +550,99 @@ $Dir = Join-Path $env:LOCALAPPDATA '${COUNSELOR_DIR}'
 $Shell = New-Object -ComObject WScript.Shell
 $NL = [Environment]::NewLine
 function Say($text, $icon) { [void]$Shell.Popup($text, 0, 'Average App counselor', $icon) }
+# A question with OK and Cancel: true for OK.
+function Ask($text) { return $Shell.Popup($text, 0, 'Average App counselor', 1 + 32) -eq 1 }
+
+# Claude Code: the first that answers as Claude Code. Claude Desktop's "claude" (under WindowsApps,
+# or its own folder) is skipped: running it would open the Desktop app.
+function Find-Claude {
+  $candidates = @(Join-Path $env:USERPROFILE '.local\bin\claude.exe')
+  $candidates += @(Get-Command claude -All -CommandType Application -ErrorAction SilentlyContinue | ForEach-Object { $_.Source })
+  $candidates += (Join-Path $env:APPDATA 'npm\claude.cmd')
+  foreach ($c in $candidates) {
+    if (-not $c -or -not (Test-Path $c) -or $c -like '*\WindowsApps\*' -or $c -like '*\AnthropicClaude\*') { continue }
+    $ErrorActionPreference = 'Continue'
+    $v = & $c --version 2>&1 | Out-String
+    $ok = $LASTEXITCODE -eq 0 -and $v -match 'Claude Code'
+    $ErrorActionPreference = 'Stop'
+    if ($ok) { return $c }
+  }
+  return $null
+}
+
+# Whether Claude Code is signed in, and to what plan: claude auth status --json, or null.
+function Get-SignIn($claude) {
+  $ErrorActionPreference = 'Continue'
+  $out = & $claude auth status --json 2>$null | Out-String
+  $ErrorActionPreference = 'Stop'
+  $a = $out.IndexOf('{')
+  $b = $out.LastIndexOf('}')
+  if ($a -lt 0 -or $b -le $a) { return $null }
+  try { return ($out.Substring($a, $b - $a + 1) | ConvertFrom-Json) } catch { return $null }
+}
 function Save($name, $text) { [IO.File]::WriteAllText((Join-Path $Dir $name), $text, (New-Object System.Text.UTF8Encoding($false))) }
 
 try {
-  # Claude Code, which the counselor runs on.
-  $Claude = $null
-  $found = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-  if ($found) { $Claude = $found.Source }
+  # A setup file from an older download carries a link that's been turned off: say so before
+  # installing anything.
+  $dead = $false
+  try { Invoke-WebRequest -UseBasicParsing -Method Get -Uri ($Site + '/api/counselor/' + $Token) -TimeoutSec 20 | Out-Null }
+  catch { if ($_.Exception.Response) { $dead = @(403, 404) -contains [int]$_.Exception.Response.StatusCode } }
+  if ($dead) {
+    Say ("This setup file is from an older download, and its link has been turned off." + $NL + $NL + "In Downloads, open the newest counselor setup file (its name may end in (1) or (2)), or download it again from Settings > Counselor.") 48
+    exit 1
+  }
+
+  # Claude Code, which the counselor runs on: installed with Anthropic's own installer when it's
+  # missing (into this account's folder; no admin, nothing to type).
+  $Claude = Find-Claude
   if (-not $Claude) {
-    foreach ($p in @((Join-Path $env:USERPROFILE '.local\bin\claude.exe'), (Join-Path $env:APPDATA 'npm\claude.cmd'))) {
-      if (Test-Path $p) { $Claude = $p; break }
+    if (-not (Ask ("Your counselor runs on Claude Code, Anthropic's app for your Claude account, and it isn't on this computer yet." + $NL + $NL + "Install it now? It takes a minute or two, needs no password, and nothing else is installed. (You'll need a Claude Pro or Max plan to use it.)"))) {
+      Say ("The counselor needs Claude Code. Double-click this file again whenever you're ready to install it.") 64
+      exit 1
+    }
+    Write-Host 'Installing Claude Code from Anthropic (a minute or two)...'
+    $installer = Join-Path $env:TEMP 'averageapp-claude-code-install.ps1'
+    $installed = $false
+    try {
+      Invoke-WebRequest -UseBasicParsing -Uri 'https://claude.ai/install.ps1' -OutFile $installer -TimeoutSec 60
+      # Its own process: the installer ends with "exit", which would end this setup too.
+      $ErrorActionPreference = 'Continue'
+      & powershell.exe -NoProfile -ExecutionPolicy Bypass -Command ("[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; & '" + $installer.Replace("'", "''") + "'")
+      $installed = $LASTEXITCODE -eq 0
+      $ErrorActionPreference = 'Stop'
+    } catch {
+      Write-Host $_.Exception.Message
+    }
+    Remove-Item -Force $installer -ErrorAction SilentlyContinue
+    $Claude = Find-Claude
+    if (-not $Claude) {
+      $how = 'It may have been blocked by your internet connection, a school or work network, or antivirus.'
+      if ($installed) { $how = 'The installer finished, but Claude Code is not where it should be.' }
+      Say ("Claude Code couldn't be installed." + $NL + $NL + $how + $NL + $NL + "You can install it from claude.com/claude-code, then double-click this file again.") 16
+      exit 1
     }
   }
-  if (-not $Claude) {
-    Say ("Claude Code isn't installed on this computer yet." + $NL + $NL + "Install it from claude.com/claude-code and sign in once, then double-click this file again.") 48
+
+  # Signed in: if not, the browser opens to sign in (the same Claude account as the website).
+  $signin = Get-SignIn $Claude
+  if (-not ($signin -and $signin.loggedIn)) {
+    if (-not (Ask ("Next, sign in to Claude Code with your Claude account." + $NL + $NL + "Your browser opens: sign in, click Authorize, then come back to this window. (Claude Code needs a Claude Pro or Max plan.)"))) {
+      Say ("The counselor needs Claude Code signed in. Double-click this file again whenever you're ready.") 64
+      exit 1
+    }
+    Write-Host 'Opening your browser to sign in to Claude...'
+    $ErrorActionPreference = 'Continue'
+    & $Claude auth login --claudeai
+    $ErrorActionPreference = 'Stop'
+    $signin = Get-SignIn $Claude
+    if (-not ($signin -and $signin.loggedIn)) {
+      Say ("Claude Code isn't signed in yet, so the counselor can't start." + $NL + $NL + "Double-click this file again to try signing in once more.") 48
+      exit 1
+    }
+  }
+  if ($signin.subscriptionType -eq 'free') {
+    Say ("Claude Code needs a Claude Pro or Max plan, and this Claude account is on the free plan." + $NL + $NL + "Upgrade at claude.ai (or sign in to Claude Code with another account), then double-click this file again.") 48
     exit 1
   }
 
@@ -610,7 +692,7 @@ __TURN_OFF__
   if (-not $ok) {
     $why = $check.Trim()
     if ($why.Length -gt 600) { $why = $why.Substring(0, 600) + '...' }
-    Say ("Claude Code couldn't reach your desk:" + $NL + $NL + $why + $NL + $NL + "If it asks you to sign in, open Claude Code once and sign in, then double-click this file again.") 16
+    Say ("Claude Code couldn't reach your desk:" + $NL + $NL + $why + $NL + $NL + "Double-click this file again to try once more. If it keeps happening, check your internet connection and that your Claude plan is Pro or Max.") 16
     exit 1
   }
   Save 'session.txt' $session

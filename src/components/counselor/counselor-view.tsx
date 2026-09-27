@@ -71,7 +71,7 @@ function SetupCard() {
       </h2>
       <p className="text-sm text-muted">
         One download, for Windows or Mac, makes Claude Code on this computer your counselor: it answers everything you ask on your desk,
-        hidden, on your own Claude plan. Needs Claude Code installed and signed in once (claude.com/claude-code). Choose what it may
+        hidden, on your own Claude plan (Pro or Max). No Claude Code yet? The setup installs it and has you sign in once. Choose what it may
         do in{" "}
         <Link href="/desk/settings/counselor" className="underline underline-offset-2">
           Settings

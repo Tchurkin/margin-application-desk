@@ -612,8 +612,9 @@ echo "The Average App counselor is off. Run the setup from the Counselor page ag
 const SETUP = String.raw`#!/bin/bash
 # Average App counselor setup for Mac. Double-click to install; your Mac asks once, in
 # System Settings > Privacy & Security > Open Anyway. This file was written for you by the
-# website and installs nothing from the internet: it sets up Claude Code, which you already have
-# and are signed in to, as your counselor, running in the background on your own Claude plan.
+# website: it sets up Claude Code as your counselor, running in the background on your own Claude
+# plan. Without Claude Code it offers to install it (Anthropic's own installer, no password) and,
+# not signed in, opens your browser to sign in. Nothing else comes from the internet.
 SITE='__SITE__'
 SUPABASE_URL='__SUPABASE_URL__'
 KEY='__KEY__'
@@ -634,6 +635,26 @@ say() {
 }
 fail() { say "$(printf 'Setting up the counselor failed:\n\n%s' "$1")" 0; exit 1; }
 
+# A question with Not now and Continue: true for Continue. In a test, AVERAGEAPP_TEST_ANSWER says.
+ask() {
+  echo
+  echo "$1"
+  if [ -n "$AVERAGEAPP_TEST" ]; then [ "$AVERAGEAPP_TEST_ANSWER" = yes ]; return; fi
+  [ "$(/usr/bin/osascript -e 'on run argv' -e 'display dialog (item 1 of argv) with title "Average App counselor" buttons {"Not now", "Continue"} default button "Continue" with icon 1' -e 'end run' "$1" 2>/dev/null)" = "button returned:Continue" ]
+}
+
+# Claude Code: the first that answers as Claude Code.
+find_claude() {
+  CLAUDE=""
+  for c in "$(command -v claude 2>/dev/null)" "$HOME/.local/bin/claude" /opt/homebrew/bin/claude /usr/local/bin/claude "$HOME/.claude/local/claude" "$HOME"/.nvm/versions/node/*/bin/claude; do
+    if [ -n "$c" ] && [ -x "$c" ] && "$c" --version 2>/dev/null | grep -q 'Claude Code'; then CLAUDE="$c"; return 0; fi
+  done
+  return 1
+}
+
+# Whether Claude Code is signed in (claude auth status --json).
+signed_in() { "$CLAUDE" auth status --json 2>/dev/null | grep -q '"loggedIn": *true'; }
+
 echo "Setting up your counselor..."
 
 # Perl, which the counselor runs on: every Mac from macOS 13 on comes with it.
@@ -642,20 +663,48 @@ if ! /usr/bin/perl -MJSON::PP -MIO::Select -MIPC::Open3 -MFcntl -MTime::HiRes -M
   exit 1
 fi
 
-# Claude Code, which the counselor runs on.
-CLAUDE=""
-for c in "$(command -v claude 2>/dev/null)" "$HOME/.local/bin/claude" /opt/homebrew/bin/claude /usr/local/bin/claude "$HOME/.claude/local/claude" "$HOME"/.nvm/versions/node/*/bin/claude; do
-  if [ -n "$c" ] && [ -x "$c" ] && "$c" --version >/dev/null 2>&1; then CLAUDE="$c"; break; fi
-done
-if [ -z "$CLAUDE" ]; then
-  say "$(printf 'Claude Code is not installed on this Mac yet.\n\nInstall it from claude.com/claude-code and sign in once, then open this file again.')" 2
-  exit 1
-fi
-
-# A setup file from an older download carries a link that's been turned off: say so, and change nothing.
+# A setup file from an older download carries a link that's been turned off: say so, and change
+# nothing (and install nothing).
 LIVE=$(/usr/bin/curl -q -sS -o /dev/null -w '%{http_code}' --max-time 20 "$SITE/api/counselor/$TOKEN" 2>/dev/null)
 if [ "$LIVE" = 403 ] || [ "$LIVE" = 404 ]; then
   say "$(printf 'This setup file is from an older download, and its link has been turned off.\n\nIn Downloads, open the newest counselor setup file (its name may end in 2 or (1)), or download it again from Settings > Counselor.')" 2
+  exit 1
+fi
+
+# Claude Code, which the counselor runs on: installed with Anthropic's own installer when it's
+# missing (into your home folder; no password, nothing to type).
+if ! find_claude; then
+  if ! ask $'Your counselor runs on Claude Code, Anthropic\'s app for your Claude account, and it is not on this Mac yet.\n\nInstall it now? It takes a minute or two, needs no password, and nothing else is installed. (You will need a Claude Pro or Max plan to use it.)'; then
+    say $'The counselor needs Claude Code. Open this file again whenever you are ready to install it.' 1
+    exit 1
+  fi
+  echo "Installing Claude Code from Anthropic (a minute or two)..."
+  if [ -n "$AVERAGEAPP_TEST" ]; then
+    [ -n "$AVERAGEAPP_TEST_INSTALLER" ] && /bin/bash "$AVERAGEAPP_TEST_INSTALLER"
+  else
+    ( set -o pipefail; /usr/bin/curl -q -fsSL https://claude.ai/install.sh | /bin/bash )
+  fi
+  if ! find_claude; then
+    say $'Claude Code could not be installed.\n\nIt may have been blocked by your internet connection or a school or work network. You can install it from claude.com/claude-code, then open this file again.' 0
+    exit 1
+  fi
+fi
+
+# Signed in: if not, your browser opens to sign in (the same Claude account as the website).
+if ! signed_in; then
+  if ! ask $'Next, sign in to Claude Code with your Claude account.\n\nYour browser opens: sign in, click Authorize, then come back to this window. (Claude Code needs a Claude Pro or Max plan.)'; then
+    say $'The counselor needs Claude Code signed in. Open this file again whenever you are ready.' 1
+    exit 1
+  fi
+  echo "Opening your browser to sign in to Claude..."
+  "$CLAUDE" auth login --claudeai
+  if ! signed_in; then
+    say $'Claude Code is not signed in yet, so the counselor cannot start.\n\nOpen this file again to try signing in once more.' 2
+    exit 1
+  fi
+fi
+if "$CLAUDE" auth status --json 2>/dev/null | grep -q '"subscriptionType": *"free"'; then
+  say $'Claude Code needs a Claude Pro or Max plan, and this Claude account is on the free plan.\n\nUpgrade at claude.ai (or sign in to Claude Code with another account), then open this file again.' 2
   exit 1
 fi
 

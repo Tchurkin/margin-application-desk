@@ -39,12 +39,15 @@ export function InstallSteps({ platform }: { platform: InstallerPlatform }) {
         <li>Your Mac says it can&apos;t open it. That&apos;s expected: click Done or Cancel (not Move to Trash).</li>
         <li>
           Open System Settings → Privacy & Security and scroll down to where it says the file was blocked. Click Open Anyway, then
-          Open Anyway (or Open) in the box that appears, and enter your Mac&apos;s password if it asks. (It&apos;s a script this site wrote for you; it installs
-          nothing from the internet.)
+          Open Anyway (or Open) in the box that appears, and enter your Mac&apos;s password if it asks. (It&apos;s a script this site
+          wrote for you.)
         </li>
         <li>
-          A Terminal window sets everything up by itself, with nothing to type. Wait for “Your counselor is on.” If your Mac says
-          Background Items Added, that&apos;s your counselor: leave it on.
+          A Terminal window sets everything up by itself, with nothing to type. If Claude Code isn&apos;t on your Mac yet, it asks to
+          install it (a minute or two), then opens your browser so you can sign in to Claude: sign in and click Authorize.
+        </li>
+        <li>
+          Wait for “Your counselor is on.” If your Mac says Background Items Added, that&apos;s your counselor: leave it on.
         </li>
         <li>That&apos;s it. Ask anything on your desk and the answer shows up there, now and every time you log in.</li>
       </ol>
@@ -54,9 +57,13 @@ export function InstallSteps({ platform }: { platform: InstallerPlatform }) {
     <ol className="list-decimal rounded-md border border-accent bg-accent-soft py-3 pr-3 pl-8 text-sm" data-testid="counselor-steps">
       <li>
         Open the downloaded file, <span className="font-medium">{INSTALLER_NAME}</span>. If Windows warns you, choose More info → Run
-        anyway (it&apos;s a script this site wrote for you; it installs nothing from the internet).
+        anyway (it&apos;s a script this site wrote for you).
       </li>
-      <li>Wait a few seconds for “Your counselor is on.”</li>
+      <li>
+        If Claude Code isn&apos;t on this computer yet, it asks to install it (a minute or two, no password), then opens your browser so
+        you can sign in to Claude: sign in and click Authorize.
+      </li>
+      <li>Wait for “Your counselor is on.”</li>
       <li>That&apos;s it. Ask anything on your desk and the answer shows up there, now and every time you sign in.</li>
     </ol>
   );

@@ -38,6 +38,13 @@ sub note {
 note({ argv => [@ARGV], pid => $$ });
 if (grep { $_ eq '--version' } @ARGV) { print "2.1.999 (Claude Code)\n"; exit 0 }
 if (@ARGV >= 2 && $ARGV[0] eq 'project' && $ARGV[1] eq 'purge') { exit 0 }
+if (@ARGV >= 2 && $ARGV[0] eq 'auth') {
+  my $flag = "$ENV{HOME}/.fake-claude-signed-in";
+  if ($ARGV[1] eq 'login') { open(my $f, '>', $flag); close $f; print "Login successful.\n"; exit 0 }
+  my $in = !$ENV{FAKE_CLAUDE_SIGNED_OUT} || -e $flag;
+  print $J->encode({ loggedIn => $in ? JSON::PP::true : JSON::PP::false, authMethod => $in ? 'claude.ai' : 'none', subscriptionType => $in ? 'pro' : undef }) . "\n";
+  exit($in ? 0 : 1);
+}
 my %o;
 for my $i (0 .. $#ARGV - 1) { $o{$1} = $ARGV[$i + 1] if $ARGV[$i] =~ /^--(session-id|resume|model|effort)$/ }
 my $session = $o{'session-id'} || $o{resume} || '';
@@ -317,5 +324,75 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
     } finally {
       spawnSync("/bin/launchctl", ["bootout", `gui/${uid}/${MAC_LABEL}`]);
     }
+  });
+});
+
+describe.runIf(runs)("the Mac setup without Claude Code: it installs it and signs in, with nothing to type", () => {
+  const desk = new Desk();
+  let home = "";
+  let claudeLog = "";
+  let env: NodeJS.ProcessEnv = { NODE_ENV: "test" };
+  const setup = (extra: Record<string, string>) => {
+    writeFileSync(join(home, "setup.command"), macInstaller({ site: desk.url, supabaseUrl: desk.url, supabaseKey: KEY, token: TOKEN }));
+    return spawnSync("/bin/bash", [join(home, "setup.command")], { env: { ...env, ...extra }, encoding: "utf8", timeout: 60_000 });
+  };
+  const installed = () => join(home, ".local", "bin", "claude");
+
+  beforeAll(async () => {
+    await desk.start();
+    home = mkdtempSync(join(tmpdir(), "mac-counselor-new-"));
+    claudeLog = join(home, "claude.log");
+    // Anthropic's installer, as far as the setup can tell: it puts Claude Code in ~/.local/bin.
+    writeFileSync(join(home, "fake-claude"), FAKE_CLAUDE);
+    writeFileSync(
+      join(home, "install.sh"),
+      `mkdir -p "$HOME/.local/bin" && cp "$HOME/fake-claude" "$HOME/.local/bin/claude" && chmod 755 "$HOME/.local/bin/claude" && echo "stand-in installer ran"\n`,
+    );
+    // No Claude Code anywhere the setup looks, and not signed in.
+    env = {
+      NODE_ENV: "test",
+      HOME: home,
+      PATH: "/usr/bin:/bin:/usr/sbin:/sbin",
+      LANG: "en_US.UTF-8",
+      AVERAGEAPP_TEST: "1",
+      AVERAGEAPP_TEST_INSTALLER: join(home, "install.sh"),
+      FAKE_CLAUDE_LOG: claudeLog,
+      FAKE_CLAUDE_SIGNED_OUT: "1",
+    };
+  });
+
+  afterAll(() => {
+    spawnSync("/usr/bin/pkill", ["-f", join(home, MAC_DIR, "mcp.json")]);
+    desk.stop();
+  });
+
+  it("asks before installing, and installs nothing when told not now", () => {
+    const r = setup({ AVERAGEAPP_TEST_ANSWER: "no" });
+    expect(r.status).toBe(1);
+    expect(r.stdout).toContain("it is not on this Mac yet");
+    expect(r.stdout).toContain("The counselor needs Claude Code.");
+    expect(existsSync(installed())).toBe(false);
+  });
+
+  it("installs Claude Code, has you sign in in the browser, then turns the counselor on", () => {
+    const r = setup({ AVERAGEAPP_TEST_ANSWER: "yes" });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).toContain("stand-in installer ran");
+    expect(r.stdout).toContain("Opening your browser to sign in to Claude...");
+    expect(r.stdout).toContain("Your counselor is on.");
+    const calls = readFileSync(claudeLog, "utf8")
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => (JSON.parse(l) as { argv?: string[] }).argv ?? []);
+    expect(calls).toContainEqual(["auth", "login", "--claudeai"]);
+    const config = JSON.parse(readFileSync(join(home, MAC_DIR, "config.json"), "utf8")) as Record<string, string>;
+    expect(config.claude).toBe(installed());
+  });
+
+  it("signed in already, it goes straight through", () => {
+    const r = setup({ AVERAGEAPP_TEST_ANSWER: "no" });
+    expect(r.status, r.stdout + r.stderr).toBe(0);
+    expect(r.stdout).not.toContain("Opening your browser");
+    expect(r.stdout).toContain("Your counselor is on.");
   });
 });
