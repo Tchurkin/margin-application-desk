@@ -306,6 +306,32 @@ test("people the desk is shared with see the essay's Ask chat, and ask in it whi
   await expect(grandpa.getByTestId("shared-ask-panel")).toContainText("You can read along here.");
 });
 
+test("people who can suggest write in a piece's notes, the student sees it live; readers only read them", async ({ page, browser }) => {
+  await studentWith(page, "notes", "");
+  const notesButton = (p: Page) => p.getByRole("button", { name: "Notes", exact: true });
+  await notesButton(page).click();
+  await page.getByLabel("Notes").fill("Mention the robotics lab");
+  await page.getByLabel("Notes").blur();
+
+  const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");
+  await openShared(mom, "Shared essay");
+  await notesButton(mom).click();
+  await expect(mom.getByLabel("Notes")).toHaveValue("Mention the robotics lab");
+  await mom.getByLabel("Notes").fill("Mention the robotics lab. Mom: and the night you fixed the arm");
+  await mom.getByLabel("Notes").blur();
+  // Live on the student's open piece, and kept.
+  await expect(page.getByLabel("Notes")).toHaveValue("Mention the robotics lab. Mom: and the night you fixed the arm", { timeout: 15_000 });
+  await page.reload();
+  await notesButton(page).click();
+  await expect(page.getByLabel("Notes")).toHaveValue("Mention the robotics lab. Mom: and the night you fixed the arm");
+
+  const grandpa = await join(browser, await makeLink(page, { role: "view", label: "Grandpa" }), "Grandpa");
+  await openShared(grandpa, "Shared essay");
+  await notesButton(grandpa).click();
+  await expect(grandpa.getByLabel("Notes")).toHaveCount(0);
+  await expect(grandpa.getByText("and the night you fixed the arm")).toBeVisible();
+});
+
 test("read-only links can't change anything", async ({ page, browser }) => {
   await studentWith(page, "viewonly", "Read me.");
   const reader = await join(browser, await makeLink(page, { role: "view" }), "Grandpa");

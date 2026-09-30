@@ -80,6 +80,56 @@ function useMetaSaver(pieceId: string) {
   return useMemo(() => ({ save, flush }), [save, flush]);
 }
 
+/**
+ * A piece's notes: the student and anyone who can suggest or edit write them. The student saves
+ * them with the piece's other fields; everyone else through set_piece_notes, the only part of a
+ * piece they may change. Everyone sees the others' changes live, except while typing in them.
+ */
+function useNotes(pieceId: string, initial: string, own: { save: (notes: string) => void; flush: () => Promise<void> } | null) {
+  const supabase = supabaseBrowser();
+  const [notes, setNotes] = useState(initial);
+  const [error, setError] = useState<string | null>(null);
+  const focused = useRef(false);
+  const pending = useRef<string | null>(null);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flush = useCallback(async () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    const body = pending.current;
+    pending.current = null;
+    if (body === null) return;
+    const { error: e } = await supabase.rpc("set_piece_notes", { piece: pieceId, body });
+    setError(e ? `Couldn't save the notes (${e.message}).` : null);
+  }, [supabase, pieceId]);
+  useEffect(() => () => void flush(), [flush]);
+
+  useEffect(() => {
+    const ch = supabase
+      .channel(`piece-notes:${pieceId}:${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "pieces", filter: `id=eq.${pieceId}` }, (p) => {
+        const n = (p.new as { notes?: unknown }).notes;
+        if (typeof n === "string" && !focused.current && pending.current === null) setNotes(n);
+      })
+      .subscribe();
+    return () => void supabase.removeChannel(ch);
+  }, [supabase, pieceId]);
+
+  const change = (text: string) => {
+    setNotes(text);
+    if (own) return own.save(text);
+    pending.current = text;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void flush(), 600);
+  };
+  const onFocus = () => (focused.current = true);
+  const onBlur = () => {
+    focused.current = false;
+    void (own ? own.flush() : flush());
+  };
+  return { notes, change, onFocus, onBlur, error };
+}
+
 interface Live {
   sync: PieceSync;
   store: SuggestionStore;
@@ -113,7 +163,6 @@ export function PieceEditor({
   const [people, setPeople] = useState<Person[]>([]);
   const [title, setTitle] = useState(piece.title);
   const [prompt, setPrompt] = useState(piece.prompt);
-  const [notes, setNotes] = useState(piece.notes);
   const [pieceStatus, setPieceStatus] = useState<PieceStatus>(piece.status);
   const [limitKind, setLimitKind] = useState<LimitKind>(piece.limit_kind);
   const [limitValue, setLimitValue] = useState<number | null>(piece.limit_value);
@@ -121,6 +170,8 @@ export function PieceEditor({
   const [text, setText] = useState("");
   const [editor, setEditor] = useState<Editor | null>(null);
   const meta = useMetaSaver(piece.id);
+  const notesBox = useNotes(piece.id, piece.notes, owner ? { save: (n: string) => meta.save({ notes: n }), flush: meta.flush } : null);
+  const notes = notesBox.notes;
   // The suggestions margin, folded away or not (per browser).
   const marginFolded = usePref(PREF.marginFolded) === "1";
   // Prompt and Notes open above the writing; the prompt starts open when there is one.
@@ -432,18 +483,28 @@ export function PieceEditor({
             "notes",
             "Notes",
             !!notes,
-            owner ? (
-              <FormattedTextarea
-                className="field"
-                rows={4}
-                value={notes}
-                aria-label="Notes"
-                placeholder="Ideas, reminders, feedback. Kept apart from the essay and never counted. People you share with can read them."
-                onChange={(e) => {
-                  setNotes(e.target.value);
-                  meta.save({ notes: e.target.value });
-                }}
-              />
+            canWrite ? (
+              <div>
+                <FormattedTextarea
+                  className="field"
+                  rows={4}
+                  value={notes}
+                  aria-label="Notes"
+                  placeholder={
+                    owner
+                      ? "Ideas, reminders, feedback. Kept apart from the essay and never counted. People you share with can read them, and edit them if they can suggest or edit."
+                      : "Ideas, reminders, feedback for the student. Kept apart from the essay and never counted."
+                  }
+                  onChange={(e) => notesBox.change(e.target.value)}
+                  onFocus={notesBox.onFocus}
+                  onBlur={notesBox.onBlur}
+                />
+                {notesBox.error && (
+                  <p className="mt-1 text-xs text-danger" role="alert">
+                    {notesBox.error}
+                  </p>
+                )}
+              </div>
             ) : (
               <div className="rounded-md border border-line bg-panel px-3 py-2">{notes ? <AnswerText text={notes} /> : <p className="text-sm">No notes.</p>}</div>
             ),

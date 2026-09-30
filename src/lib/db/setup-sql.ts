@@ -47,6 +47,7 @@ export const PROBES: Record<string, string> = {
   "20261018000000": fn("counselor_other_on"),
   "20261019000000": col("desk_requests", "asked_by"),
   "20261020000000": fn("counselor_answers_guests"),
+  "20261021000000": fn("set_piece_notes"),
 };
 
 /**

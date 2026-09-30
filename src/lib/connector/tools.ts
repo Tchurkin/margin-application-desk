@@ -209,7 +209,7 @@ export function renderPiece(p: PieceInfo, body: string): string {
     "## The current text (paragraphs are separated by single line breaks)",
     body || "(empty: nothing written yet)",
   );
-  if (p.notes) lines.push("", "## The student's notes (not part of the essay)", p.notes);
+  if (p.notes) lines.push("", "## Notes from the student and the people they share with (not part of the essay)", p.notes);
   if (p.college?.research) lines.push("", `## The student's research on ${p.college.name}`, p.college.research);
   if (p.student?.about) lines.push("", "## About the student (in their words)", p.student.about);
   if (p.other_pieces.length) {
