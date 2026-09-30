@@ -306,6 +306,49 @@ test("people the desk is shared with see the essay's Ask chat, and ask in it whi
   await expect(grandpa.getByTestId("shared-ask-panel")).toContainText("You can read along here.");
 });
 
+test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
+  await studentWith(page, "comment", "The cat sat.");
+  const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");
+  await openShared(mom, "Shared essay");
+  await essay(mom).click();
+
+  // Highlight "cat": the Comment button shows under it.
+  await mom.keyboard.press("Control+Home");
+  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
+  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await mom.getByTestId("comment-button").click();
+  const draft = mom.getByTestId("comment-draft");
+  await expect(draft).toContainText("“cat”");
+  await draft.getByLabel("Your comment").fill("Which cat? Name her.");
+  await draft.getByRole("button", { name: "Comment" }).click();
+  await expect(mom.getByTestId("comment")).toContainText("Which cat? Name her.");
+
+  // Live for the student: in the margin, and the words underlined in the essay.
+  const comment = page.getByTestId("comment");
+  await expect(comment).toContainText("Mom Testy");
+  await expect(comment).toContainText("“cat”");
+  await expect(comment).toContainText("Which cat? Name her.");
+  await expect(essay(page).locator(".sugg-comment")).toHaveText("cat");
+  await expect(suggestions(page)).toHaveCount(0);
+  await expectEssay(page, "The cat sat.");
+
+  // The student comments too, with the keyboard, then resolves Mom's.
+  await essay(page).click();
+  await page.keyboard.press("Control+End");
+  for (let i = 0; i < 4; i++) await page.keyboard.press("Shift+ArrowLeft");
+  await page.keyboard.press("Control+Alt+m");
+  await page.getByTestId("comment-draft").getByLabel("Your comment").fill("Ending too quick?");
+  await page.keyboard.press("Control+Enter");
+  await expect(page.getByTestId("comment")).toHaveCount(2);
+  await expect(mom.getByTestId("comment")).toHaveCount(2);
+  await page.getByTestId("comment").filter({ hasText: "Which cat" }).getByRole("button", { name: "Resolve" }).click();
+  await expect(page.getByTestId("comment")).toHaveCount(1);
+  await expect(mom.getByTestId("comment")).toHaveCount(1);
+  await page.reload();
+  await expect(page.getByTestId("comment")).toContainText("Ending too quick?");
+  await expectEssay(page, "The cat sat.");
+});
+
 test("people who can suggest write in a piece's notes, the student sees it live; readers only read them", async ({ page, browser }) => {
   await studentWith(page, "notes", "");
   const notesButton = (p: Page) => p.getByRole("button", { name: "Notes", exact: true });

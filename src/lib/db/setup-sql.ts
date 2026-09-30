@@ -48,6 +48,7 @@ export const PROBES: Record<string, string> = {
   "20261019000000": col("desk_requests", "asked_by"),
   "20261020000000": fn("counselor_answers_guests"),
   "20261021000000": fn("set_piece_notes"),
+  "20261022000000": `coalesce(position('comment' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'suggestions_kind_check' and c.conrelid = to_regclass('public.suggestions')))) > 0, false)`,
 };
 
 /**

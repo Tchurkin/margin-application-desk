@@ -6,6 +6,9 @@
  * except the student's own deliberate ones (DIRECT_EDIT: accepting, restoring a version). Suggestions are drawn over the text with decorations: deletions struck
  * through, insertions as a marked widget.
  *
+ * Comments are anchored and drawn the same way (the words they cover, underlined), and change
+ * nothing.
+ *
  * Every suggestion is anchored with Yjs relative positions, so it stays on the same letters
  * however the document changes around it, and so does everyone's caret.
  */
@@ -278,6 +281,18 @@ function decorations(state: EditorState, opts: SuggestOptions): DecorationSet {
     if (r.gone && r.at === null) continue;
     const mine = s.author_id === opts.me.id;
     const cls = `${mine ? " sugg-mine" : ""}${picked === s.id ? " sugg-picked" : ""}${r.stale ? " sugg-stale" : ""}`;
+    if (s.kind === "comment") {
+      if (r.from !== null && r.to !== null && r.to > r.from) {
+        decos.push(
+          Decoration.inline(r.from, r.to, {
+            class: `sugg-comment${cls}`,
+            "data-sugg": s.id,
+            title: `${s.author_name || "Someone"}: ${s.body ?? ""}`.slice(0, 300),
+          }),
+        );
+      }
+      continue;
+    }
     if (r.from !== null && r.to !== null && r.to > r.from) {
       decos.push(
         Decoration.inline(r.from, r.to, {
@@ -345,7 +360,7 @@ function mine(opts: SuggestOptions) {
 /** My insertion (or replacement) whose text goes in at `pos`, newest first. */
 function myInsertAt(state: EditorState, opts: SuggestOptions, pos: number): Suggestion | null {
   const found = mine(opts)
-    .filter((s) => s.kind !== "delete")
+    .filter((s) => s.kind === "insert" || s.kind === "replace")
     .filter((s) => resolveSuggestion(state, s).at === pos)
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   return found[0] ?? null;
@@ -522,12 +537,37 @@ export function suggestForwardDelete(view: EditorView, opts: SuggestOptions) {
   suggestDelete(view, opts, pos, next, next);
 }
 
+// ─── commenting ─────────────────────────────────────────────────────────────
+
+/** A comment on the words from `from` to `to`, anchored like a suggestion, with nothing to say yet. */
+export function commentOn(state: EditorState, from: number, to: number, who: { id: string; name: string }, pieceId: string): Suggestion | null {
+  if (to <= from) return null;
+  const quote = textBetweenPos(docText(state.doc), from, to);
+  if (!quote.trim()) return null;
+  return {
+    id: newId(),
+    piece_id: pieceId,
+    author_id: who.id,
+    author_name: who.name,
+    source: "person",
+    kind: "comment",
+    anchor_from: anchorAt(state, from, 0),
+    anchor_to: anchorAt(state, to, -1),
+    quote,
+    body: "",
+    status: "open",
+    version: 0,
+    created_at: new Date().toISOString(),
+  };
+}
+
 // ─── accepting (the student) ────────────────────────────────────────────────
 
 /**
  * Apply a suggestion to the text as the student's own edit. Returns false if its text is gone.
  */
 export function acceptInto(view: EditorView, s: Suggestion): boolean {
+  if (s.kind === "comment") return false;
   const r = resolveSuggestion(view.state, s);
   const tr = view.state.tr;
   if (s.kind === "insert") {

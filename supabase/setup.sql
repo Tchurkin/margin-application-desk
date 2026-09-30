@@ -17,7 +17,7 @@ create table if not exists average_app.migrations (version text primary key, nam
 
 do $setup$
 declare
-  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes'];
+  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments'];
   marked text[];
   cli text[] := '{}';
   have boolean[];
@@ -60,7 +60,8 @@ begin
     ('20261018000000' = any(marked)) or ('20261018000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'counselor_other_on')),
     ('20261019000000' = any(marked)) or ('20261019000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'desk_requests' and column_name = 'asked_by')),
     ('20261020000000' = any(marked)) or ('20261020000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'counselor_answers_guests')),
-    ('20261021000000' = any(marked)) or ('20261021000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'set_piece_notes'))
+    ('20261021000000' = any(marked)) or ('20261021000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'set_piece_notes')),
+    ('20261022000000' = any(marked)) or ('20261022000000' = any(cli)) or (coalesce(position('comment' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'suggestions_kind_check' and c.conrelid = to_regclass('public.suggestions')))) > 0, false))
   ];
 
   for i in 1 .. array_length(names, 1) loop
@@ -4200,6 +4201,24 @@ $m20261021000000$;
     insert into average_app.migrations (version, name) values ('20261021000000', '20261021000000_shared_notes');
     applied := applied + 1;
     raise notice 'Applied %', '20261021000000_shared_notes' || case when late[29] then ' (it had been skipped)' else '' end;
+  end if;
+
+  if not have[30] then
+    execute $m20261022000000$
+-- Comments on highlighted words.
+--
+-- Braxton's call (9/29/26): anyone who can suggest on a desk (the student, and people with suggest
+-- or edit access) can highlight words in an essay and leave a comment on them. A comment is a
+-- suggestion of its own kind: anchored to the words the same way, shown in the margin and live for
+-- everyone, and resolved by the student; it changes nothing in the text. Its author can delete it
+-- while it's open, as with any suggestion.
+
+alter table public.suggestions drop constraint if exists suggestions_kind_check;
+alter table public.suggestions add constraint suggestions_kind_check check (kind in ('insert', 'delete', 'replace', 'comment'));
+$m20261022000000$;
+    insert into average_app.migrations (version, name) values ('20261022000000', '20261022000000_comments');
+    applied := applied + 1;
+    raise notice 'Applied %', '20261022000000_comments' || case when late[30] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

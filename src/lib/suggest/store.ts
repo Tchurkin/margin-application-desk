@@ -8,7 +8,8 @@
 
 import type { KeyValue } from "@/lib/sync/piece-sync";
 
-export type SuggestionKind = "insert" | "delete" | "replace";
+/** A comment is a note on the words it covers (`body`); it never changes the text. */
+export type SuggestionKind = "insert" | "delete" | "replace" | "comment";
 export type SuggestionStatus = "open" | "accepted" | "declined";
 
 export interface Suggestion {

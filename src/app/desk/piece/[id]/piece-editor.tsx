@@ -18,9 +18,9 @@ import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
 import { WriteWorkspace } from "./write-workspace";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";
-import { HeldSelection } from "@/lib/editor/held-selection";
+import { HeldSelection, heldRange, heldSelectionKey } from "@/lib/editor/held-selection";
 import { Rewrites } from "@/lib/editor/rewrites";
-import { acceptInto, DIRECT_EDIT, resolveSuggestion, suggestKey, suggestPlugin, type SuggestMode } from "@/lib/suggest/plugin";
+import { acceptInto, commentOn, DIRECT_EDIT, resolveSuggestion, suggestKey, suggestPlugin, type SuggestMode } from "@/lib/suggest/plugin";
 import { SuggestionStore, type Suggestion } from "@/lib/suggest/store";
 import { SupabaseSuggestionBackend } from "@/lib/suggest/supabase-backend";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -356,6 +356,38 @@ export function PieceEditor({
   const openCount = useOpenCount(live?.store ?? null);
   const limit = limitState(text, limitKind, limitValue);
 
+  // Comments: anyone who can suggest highlights words and comments on them in the margin.
+  const canComment = canWrite && !!live && !!editor;
+  const [draft, setDraft] = useState<Suggestion | null>(null);
+  const startComment = useCallback(() => {
+    if (!editor || !canComment) return;
+    const { from, to } = editor.state.selection;
+    const range = to > from ? { from, to } : heldRange(editor.state);
+    const c = range && commentOn(editor.state, range.from, range.to, me, piece.id);
+    if (!c) return;
+    // Keep the words highlighted while the comment is written.
+    editor.view.dispatch(editor.state.tr.setMeta(heldSelectionKey, { from: range.from, to: range.to }).setMeta("addToHistory", false));
+    setDraft(c);
+    if (marginFolded) writePref(PREF.marginFolded, "0");
+  }, [editor, canComment, me, piece.id, marginFolded]);
+  const endComment = useCallback(() => {
+    setDraft(null);
+    if (editor && !editor.isDestroyed) editor.view.dispatch(editor.state.tr.setMeta(heldSelectionKey, null).setMeta("addToHistory", false));
+  }, [editor]);
+  // Ctrl+Alt+M (as in Google Docs) comments on the highlighted words.
+  useEffect(() => {
+    if (!editor || !canComment) return;
+    const dom = editor.view.dom;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.altKey && e.key.toLowerCase() === "m") {
+        e.preventDefault();
+        startComment();
+      }
+    };
+    dom.addEventListener("keydown", onKey);
+    return () => dom.removeEventListener("keydown", onKey);
+  }, [editor, canComment, startComment]);
+
   const body = (
     <div className={`grid gap-6 ${marginFolded ? "lg:grid-cols-[1fr_auto]" : "lg:grid-cols-[1fr_18rem]"} ${workspace ? "p-4" : ""}`}>
       <section className="min-w-0">
@@ -543,7 +575,8 @@ export function PieceEditor({
             <FormatToolbar editor={editor} mode={editorMode === "suggest" ? "suggest" : "owner"} store={live.store} />
           </div>
         )}
-        <div className="card essay mt-4 px-5 py-4 sm:px-8 sm:py-6">
+        <div className="card essay relative mt-4 px-5 py-4 sm:px-8 sm:py-6">
+          {editor && canComment && <CommentButton editor={editor} onComment={startComment} />}
           {loadError ? (
             <p className="text-danger">Couldn&apos;t open this piece: {loadError}</p>
           ) : status === "gone" ? (
@@ -586,7 +619,7 @@ export function PieceEditor({
       <aside className="flex items-start gap-2" aria-label="Margin">
         <div id="essay-margin" className={`min-w-0 flex-1 ${marginFolded ? "lg:hidden" : ""}`}>
           {live && editor ? (
-            <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} />
+            <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} draft={draft} onDraftDone={endComment} />
           ) : (
             <p className="text-sm text-muted">Suggestions appear here.</p>
           )}
@@ -768,6 +801,7 @@ const cut = (t: string | undefined) => {
 
 /** What a suggestion does, in words, for screen readers. */
 function describe(s: Suggestion): string {
+  if (s.kind === "comment") return `Comment on “${cut(s.quote)}”: ${cut(s.body)}`;
   if (s.kind === "insert") return `Add “${cut(s.body)}”`;
   if (s.kind === "delete") return `Delete “${cut(s.quote)}”`;
   return `Replace “${cut(s.quote)}” with “${cut(s.body)}”`;
@@ -791,8 +825,115 @@ const CARD: Record<Suggestion["kind"], string> = {
   insert: "border-add/40 bg-add-soft",
   delete: "border-danger/40 bg-danger-soft",
   replace: "border-line bg-panel",
+  comment: "border-warn/40 bg-warn-soft",
 };
-const VERB: Record<Suggestion["kind"], string> = { insert: "Add", delete: "Delete", replace: "Replace" };
+const VERB: Record<Suggestion["kind"], string> = { insert: "Add", delete: "Delete", replace: "Replace", comment: "Comment" };
+
+/**
+ * A small "Comment" button just under highlighted words, while the essay has a highlight. It
+ * doesn't take the focus, so the words stay highlighted when it's pressed.
+ */
+function CommentButton({ editor, onComment }: { editor: Editor; onComment: () => void }) {
+  const [at, setAt] = useState<{ top: number; left: number } | null>(null);
+  useEffect(() => {
+    const place = () => {
+      const { from, to, empty } = editor.state.selection;
+      const box = editor.view.dom.closest(".essay") as HTMLElement | null;
+      if (empty || !editor.isFocused || !box || !editor.state.doc.textBetween(from, to, " ").trim()) return setAt(null);
+      try {
+        const end = editor.view.coordsAtPos(to);
+        const r = box.getBoundingClientRect();
+        setAt({ top: end.bottom - r.top + 6, left: Math.max(8, Math.min(end.left - r.left - 24, r.width - 116)) });
+      } catch {
+        setAt(null);
+      }
+    };
+    const hide = () => setAt(null);
+    editor.on("selectionUpdate", place);
+    editor.on("focus", place);
+    editor.on("update", place);
+    editor.on("blur", hide);
+    return () => {
+      editor.off("selectionUpdate", place);
+      editor.off("focus", place);
+      editor.off("update", place);
+      editor.off("blur", hide);
+    };
+  }, [editor]);
+  if (!at) return null;
+  return (
+    <button
+      type="button"
+      data-testid="comment-button"
+      title="Comment on the highlighted words (Ctrl+Alt+M)"
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => {
+        setAt(null);
+        onComment();
+      }}
+      style={{ top: at.top, left: at.left }}
+      className="absolute z-10 flex items-center gap-1 rounded-md border border-line bg-panel px-2 py-1 font-sans text-xs text-ink shadow-sm hover:border-muted"
+    >
+      <svg aria-hidden viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round">
+        <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />
+      </svg>
+      Comment
+    </button>
+  );
+}
+
+/** Writing a new comment, at the top of the margin. */
+function CommentDraft({ draft, onPost, onCancel }: { draft: Suggestion; onPost: (body: string) => void; onCancel: () => void }) {
+  const [body, setBody] = useState("");
+  const post = () => body.trim() && onPost(body.trim());
+  return (
+    <div className="mb-3 rounded-md border border-warn/40 bg-warn-soft p-2 text-sm" data-testid="comment-draft">
+      <p className="mb-1 font-serif text-muted italic break-words">“{cut(draft.quote)}”</p>
+      <label htmlFor={`comment-${draft.id}`} className="sr-only">
+        Your comment
+      </label>
+      <textarea
+        id={`comment-${draft.id}`}
+        className="field min-h-16 w-full resize-y"
+        rows={3}
+        autoFocus
+        value={body}
+        placeholder="Add a comment…"
+        onChange={(e) => setBody(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+            e.preventDefault();
+            post();
+          } else if (e.key === "Escape") onCancel();
+        }}
+      />
+      <div className="mt-2 flex gap-2">
+        <button type="button" className="btn btn-primary" disabled={!body.trim()} onClick={post}>
+          Comment
+        </button>
+        <button type="button" className="btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** The suggestion or comment last clicked in the essay (or its card). */
+function usePicked(editor: Editor): string | null {
+  const subscribe = useCallback(
+    (fn: () => void) => {
+      editor.on("transaction", fn);
+      return () => void editor.off("transaction", fn);
+    },
+    [editor],
+  );
+  return useSyncExternalStore(
+    subscribe,
+    () => suggestKey.getState(editor.state)?.picked ?? null,
+    () => null,
+  );
+}
 
 /** How many suggestions are open (none while the piece loads). */
 function useOpenCount(store: SuggestionStore | null): number {
@@ -806,14 +947,14 @@ function useOpenCount(store: SuggestionStore | null): number {
 
 /** The caret that folds the margin away (the writing takes its space) and brings it back, with how many suggestions wait there. */
 function MarginToggle({ folded, count }: { folded: boolean; count: number }) {
-  const waiting = count ? ` (${count} suggestion${count === 1 ? "" : "s"})` : "";
+  const waiting = count ? ` (${count} waiting)` : "";
   return (
     <button
       type="button"
       aria-expanded={!folded}
       aria-controls="essay-margin"
       aria-label={folded ? `Show the margin${waiting}` : "Fold the margin away"}
-      title={folded ? `Show the suggestions${waiting}` : "Fold the margin away: the writing takes its space"}
+      title={folded ? `Show the suggestions and comments${waiting}` : "Fold the margin away: the writing takes its space"}
       onClick={() => writePref(PREF.marginFolded, folded ? "0" : "1")}
       className="hidden shrink-0 flex-col items-center gap-1 rounded-md p-1 text-muted hover:bg-bg hover:text-ink lg:flex"
     >
@@ -829,8 +970,27 @@ function MarginToggle({ folded, count }: { folded: boolean; count: number }) {
   );
 }
 
-function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Editor; role: Role; me: string }) {
+function SuggestionsPanel({
+  live,
+  editor,
+  role,
+  me,
+  draft,
+  onDraftDone,
+}: {
+  live: Live;
+  editor: Editor;
+  role: Role;
+  me: string;
+  /** A comment being written, if any. */
+  draft: Suggestion | null;
+  onDraftDone: () => void;
+}) {
   const { store } = live;
+  const picked = usePicked(editor);
+  useEffect(() => {
+    if (picked) document.querySelector(`[data-card="${picked}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [picked]);
   const open = useSyncExternalStore(
     (fn) => store.subscribe(fn),
     () => store.open(),
@@ -845,24 +1005,44 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
 
   const pick = (id: string) => editor.view.dispatch(editor.state.tr.setMeta(suggestKey, { pick: id }));
 
+  const draftBox = draft && (
+    <CommentDraft
+      key={draft.id}
+      draft={draft}
+      onCancel={onDraftDone}
+      onPost={(body) => {
+        store.put({ ...draft, body, created_at: new Date().toISOString() });
+        onDraftDone();
+      }}
+    />
+  );
+
   if (!open.length && !undo) {
     return (
       <div>
-        <p className="label">Suggestions</p>
-        <p className="text-sm text-muted">
-          {role === "owner"
-            ? "Suggestions from the people you share with, and from Claude, appear here beside your essay."
-            : role === "view"
-              ? "No suggestions yet."
-              : "None yet. Your suggestions appear here for the writer to accept or decline."}
-        </p>
+        <p className="label">Suggestions and comments</p>
+        {draftBox}
+        {!draft && (
+          <p className="text-sm text-muted">
+            {role === "owner"
+              ? "Suggestions and comments from the people you share with, and from Claude, appear here beside your essay. Highlight words to comment on them."
+              : role === "view"
+                ? "No suggestions or comments yet."
+                : "None yet. Your suggestions and comments appear here for the writer. Highlight words to comment on them."}
+          </p>
+        )}
       </div>
     );
   }
 
+  const comments = open.filter((s) => s.kind === "comment").length;
+  const counts = [open.length - comments ? `${open.length - comments} suggestion${open.length - comments === 1 ? "" : "s"}` : "", comments ? `${comments} comment${comments === 1 ? "" : "s"}` : ""]
+    .filter(Boolean)
+    .join(", ");
   return (
     <div>
-      <p className="label">Suggestions ({open.length})</p>
+      <p className="label">Suggestions and comments{counts && ` (${counts})`}</p>
+      {draftBox}
       {undo && (
         <p className="mb-2 flex items-center justify-between rounded-md bg-accent-soft px-2 py-1 text-sm" role="status">
           {undo.label}
@@ -878,11 +1058,64 @@ function SuggestionsPanel({ live, editor, role, me }: { live: Live; editor: Edit
           </button>
         </p>
       )}
-      <ul className="flex flex-col gap-2" aria-label="Suggestions">
+      <ul className="flex flex-col gap-2" aria-label="Suggestions and comments">
         {open.map((s) => {
           const r = resolveSuggestion(editor.state, s);
+          if (s.kind === "comment") {
+            return (
+              <li
+                key={s.id}
+                data-card={s.id}
+                className={`rounded-md border p-2 text-sm ${CARD.comment} ${picked === s.id ? "ring-2 ring-accent" : ""}`}
+                data-testid="comment"
+              >
+                <button type="button" className="block w-full text-left" onClick={() => pick(s.id)}>
+                  <span className="mb-1 block text-xs text-muted">
+                    <span aria-hidden className="font-medium text-warn">
+                      Comment ·{" "}
+                    </span>
+                    {s.author_name || "Someone"}
+                    {s.source === "ai" && " · AI"}
+                    {r.gone && " · its words are gone"}
+                  </span>
+                  <span className="sr-only">{describe(s)}</span>
+                  <span aria-hidden className="block font-serif text-muted italic break-words">
+                    “{cut(s.quote)}”
+                  </span>
+                  <span aria-hidden className="mt-1 block break-words whitespace-pre-wrap">
+                    {s.body}
+                  </span>
+                </button>
+                <div className="mt-2 flex gap-2">
+                  {role === "owner" && (
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={() => {
+                        store.resolve(s.id, "accepted");
+                        setUndo({ label: "Resolved.", run: () => store.resolve(s.id, "open") });
+                      }}
+                    >
+                      Resolve
+                    </button>
+                  )}
+                  {role !== "view" && s.author_id === me && (
+                    <button type="button" className="btn" onClick={() => store.remove(s.id)}>
+                      Delete
+                    </button>
+                  )}
+                </div>
+              </li>
+            );
+          }
           return (
-            <li key={s.id} className={`rounded-md border p-2 text-sm ${CARD[s.kind]}`} data-testid="suggestion" data-kind={s.kind}>
+            <li
+              key={s.id}
+              data-card={s.id}
+              className={`rounded-md border p-2 text-sm ${CARD[s.kind]} ${picked === s.id ? "ring-2 ring-accent" : ""}`}
+              data-testid="suggestion"
+              data-kind={s.kind}
+            >
               <button type="button" className="block w-full text-left" onClick={() => pick(s.id)}>
                 <span className="mb-1 block text-xs text-muted">
                   <span aria-hidden className={`font-medium ${s.kind === "insert" ? "text-add" : s.kind === "delete" ? "text-danger" : "text-ink"}`}>

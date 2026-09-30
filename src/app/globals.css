@@ -249,6 +249,12 @@ body {
   border-radius: 2px;
   box-shadow: 0 1px 0 var(--warn);
 }
+/* Words someone commented on: underlined in amber (lighter than a held highlight); the comment is in the margin. */
+.essay .sugg-comment {
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  border-bottom: 2px solid color-mix(in srgb, var(--warn) 65%, transparent);
+  cursor: pointer;
+}
 .essay .sugg-stale { outline: 1px dashed var(--warn); }
 .essay .sugg-picked { outline: 2px solid var(--accent); outline-offset: 1px; }
 

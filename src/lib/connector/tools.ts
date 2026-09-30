@@ -219,10 +219,16 @@ export function renderPiece(p: PieceInfo, body: string): string {
     }
   }
   if (p.open_suggestions.length) {
-    lines.push("", "## Suggestions waiting for the student");
+    lines.push("", "## Suggestions and comments waiting for the student");
     for (const s of p.open_suggestions) {
       const what =
-        s.kind === "insert" ? `add "${s.body}"` : s.kind === "delete" ? `delete "${s.quote}"` : `replace "${s.quote}" with "${s.body}"`;
+        s.kind === "comment"
+          ? `comments on "${s.quote}": ${s.body}`
+          : s.kind === "insert"
+            ? `add "${s.body}"`
+            : s.kind === "delete"
+              ? `delete "${s.quote}"`
+              : `replace "${s.quote}" with "${s.body}"`;
       lines.push(`- ${s.author}${s.source === "ai" ? " (AI)" : ""}: ${what}${s.note ? `. Reason: ${s.note}` : ""}`);
     }
   }
