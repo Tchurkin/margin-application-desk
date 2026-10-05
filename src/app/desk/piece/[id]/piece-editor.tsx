@@ -1035,6 +1035,14 @@ function SuggestionsPanel({
     );
   }
 
+  // In the order they come in the essay (where two start at the same place, the older first);
+  // ones whose words are gone go last.
+  const placed = open
+    .map((s, i) => {
+      const r = resolveSuggestion(editor.state, s);
+      return { s, r, i, pos: r.from ?? r.at ?? Number.MAX_SAFE_INTEGER };
+    })
+    .sort((x, y) => x.pos - y.pos || x.i - y.i);
   const comments = open.filter((s) => s.kind === "comment").length;
   const counts = [open.length - comments ? `${open.length - comments} suggestion${open.length - comments === 1 ? "" : "s"}` : "", comments ? `${comments} comment${comments === 1 ? "" : "s"}` : ""]
     .filter(Boolean)
@@ -1059,8 +1067,7 @@ function SuggestionsPanel({
         </p>
       )}
       <ul className="flex flex-col gap-2" aria-label="Suggestions and comments">
-        {open.map((s) => {
-          const r = resolveSuggestion(editor.state, s);
+        {placed.map(({ s, r }) => {
           if (s.kind === "comment") {
             return (
               <li

@@ -306,6 +306,30 @@ test("people the desk is shared with see the essay's Ask chat, and ask in it whi
   await expect(grandpa.getByTestId("shared-ask-panel")).toContainText("You can read along here.");
 });
 
+test("the margin lists suggestions in the order they come in the essay, not the order they were made", async ({ page, browser }) => {
+  await studentWith(page, "order", "The cat sat.");
+  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  await openShared(mom, "Shared essay");
+  await essay(mom).click();
+  // First at the end, then at the start, then in the middle.
+  await mom.keyboard.press("Control+End");
+  await mom.keyboard.type(" Quietly.");
+  await expect(suggestions(page)).toHaveCount(1);
+  await mom.keyboard.press("Control+Home");
+  await mom.keyboard.type("Once, ");
+  await expect(suggestions(page)).toHaveCount(2);
+  await mom.keyboard.press("Control+Home");
+  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
+  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await mom.keyboard.type("dog");
+  for (const p of [page, mom]) {
+    await expect(suggestions(p)).toHaveCount(3);
+    await expect(suggestions(p).nth(0)).toContainText("Add “Once, ”");
+    await expect(suggestions(p).nth(1)).toContainText("Replace “cat” with “dog”");
+    await expect(suggestions(p).nth(2)).toContainText("Add “ Quietly.”");
+  }
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");
