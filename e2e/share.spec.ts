@@ -330,6 +330,24 @@ test("the margin lists suggestions in the order they come in the essay, not the 
   }
 });
 
+test("the margin stays in view as a long essay scrolls", async ({ page }) => {
+  await studentWith(page, "sticky", "");
+  await essay(page).click();
+  await page.keyboard.insertText(Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1} of a long essay.`).join("\n"));
+  await waitSaved(page);
+  const margin = page.locator("#essay-margin");
+  await expect(margin).toBeInViewport();
+  // Whichever scrolls here: the writing column on a wide screen, or the page.
+  await page.evaluate(() => {
+    const el = document.querySelector("[data-write-scroll]");
+    if (el) el.scrollTop = el.scrollHeight;
+    window.scrollTo(0, document.body.scrollHeight);
+  });
+  await expect(page.getByTestId("count")).toBeInViewport();
+  await expect(margin).toBeInViewport();
+  await expect(page.getByRole("button", { name: "Fold the margin away" })).toBeInViewport();
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");

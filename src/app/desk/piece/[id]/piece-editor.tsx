@@ -616,8 +616,12 @@ export function PieceEditor({
       </section>
 
       {/* The margin: suggestions, and nothing else. On a wide screen it folds away to the right. */}
-      <aside className="flex items-start gap-2" aria-label="Margin">
-        <div id="essay-margin" className={`min-w-0 flex-1 ${marginFolded ? "lg:hidden" : ""}`}>
+      {/* Beside the writing it stays in view as the essay scrolls, and scrolls by itself when it's long. */}
+      <aside className="flex items-start gap-2 lg:sticky lg:top-4 lg:self-start" aria-label="Margin">
+        <div
+          id="essay-margin"
+          className={`min-w-0 flex-1 lg:max-h-[calc(100dvh-var(--ws-top,3.1rem)-2rem)] lg:overflow-y-auto lg:overscroll-contain lg:p-0.5 ${marginFolded ? "lg:hidden" : ""}`}
+        >
           {live && editor ? (
             <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} draft={draft} onDraftDone={endComment} />
           ) : (
