@@ -330,22 +330,37 @@ test("the margin lists suggestions in the order they come in the essay, not the 
   }
 });
 
-test("the margin stays in view as a long essay scrolls", async ({ page }) => {
-  await studentWith(page, "sticky", "");
+test("each suggestion sits beside the words it is about, and the margin's heading follows the essay down", async ({ page }) => {
+  await studentWith(page, "beside", "");
   await essay(page).click();
   await page.keyboard.insertText(Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1} of a long essay.`).join("\n"));
   await waitSaved(page);
-  const margin = page.locator("#essay-margin");
-  await expect(margin).toBeInViewport();
-  // Whichever scrolls here: the writing column on a wide screen, or the page.
-  await page.evaluate(() => {
-    const el = document.querySelector("[data-write-scroll]");
-    if (el) el.scrollTop = el.scrollHeight;
-    window.scrollTo(0, document.body.scrollHeight);
-  });
-  await expect(page.getByTestId("count")).toBeInViewport();
-  await expect(margin).toBeInViewport();
+  // One suggestion at the very start, one at the very end.
+  await page.getByRole("radio", { name: "Suggesting" }).click();
+  await essay(page).click();
+  await page.keyboard.press("Control+Home");
+  await page.keyboard.type("Start. ");
+  await expect(suggestions(page)).toHaveCount(1);
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type(" The end.");
+  await expect(suggestions(page)).toHaveCount(2);
+
+  // Each card is level with its words (same scroll position for both measurements).
+  const top = async (l: ReturnType<Page["locator"]>) => (await l.boundingBox())!.y;
+  for (const [card, mark] of [
+    [suggestions(page).nth(0), essay(page).locator(".sugg-ins").first()],
+    [suggestions(page).nth(1), essay(page).locator(".sugg-ins").last()],
+  ] as const) {
+    await expect.poll(async () => Math.abs((await top(card)) - (await top(mark)))).toBeLessThan(40);
+  }
+  expect((await top(suggestions(page).nth(1))) - (await top(suggestions(page).nth(0)))).toBeGreaterThan(1000);
+
+  // Scrolled to the end: the heading and the caret are still in view, the first card is not.
+  await suggestions(page).nth(1).scrollIntoViewIfNeeded();
+  await expect(page.getByTestId("margin-heading")).toBeInViewport();
   await expect(page.getByRole("button", { name: "Fold the margin away" })).toBeInViewport();
+  await expect(suggestions(page).nth(1)).toBeInViewport();
+  await expect(suggestions(page).nth(0)).not.toBeInViewport();
 });
 
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {

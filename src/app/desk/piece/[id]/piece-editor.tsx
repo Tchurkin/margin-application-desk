@@ -7,11 +7,11 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AnswerText, InlineText } from "@/components/ask/answer-text";
 import { FormattedTextarea } from "@/components/formatted-textarea";
 import { FormatToolbar } from "@/components/write/format-toolbar";
-import { usePref, writePref } from "@/components/write/hooks";
+import { useMedia, usePref, writePref } from "@/components/write/hooks";
 import { VersionCompare, type LoadedVersion } from "@/components/write/version-compare";
 import { PREF } from "@/lib/write/layout";
 import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
@@ -616,12 +616,9 @@ export function PieceEditor({
       </section>
 
       {/* The margin: suggestions, and nothing else. On a wide screen it folds away to the right. */}
-      {/* Beside the writing it stays in view as the essay scrolls, and scrolls by itself when it's long. */}
-      <aside className="flex items-start gap-2 lg:sticky lg:top-4 lg:self-start" aria-label="Margin">
-        <div
-          id="essay-margin"
-          className={`min-w-0 flex-1 lg:max-h-[calc(100dvh-var(--ws-top,3.1rem)-2rem)] lg:overflow-y-auto lg:overscroll-contain lg:p-0.5 ${marginFolded ? "lg:hidden" : ""}`}
-        >
+      {/* It runs the height of the writing, each card beside its words; its heading and caret stay in view. */}
+      <aside className="flex items-start gap-2" aria-label="Margin">
+        <div id="essay-margin" className={`min-w-0 flex-1 self-stretch ${marginFolded ? "lg:hidden" : ""}`}>
           {live && editor ? (
             <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} draft={draft} onDraftDone={endComment} />
           ) : (
@@ -891,7 +888,7 @@ function CommentDraft({ draft, onPost, onCancel }: { draft: Suggestion; onPost: 
   const [body, setBody] = useState("");
   const post = () => body.trim() && onPost(body.trim());
   return (
-    <div className="mb-3 rounded-md border border-warn/40 bg-warn-soft p-2 text-sm" data-testid="comment-draft">
+    <div className="rounded-md border border-warn/40 bg-warn-soft p-2 text-sm" data-testid="comment-draft">
       <p className="mb-1 font-serif text-muted italic break-words">“{cut(draft.quote)}”</p>
       <label htmlFor={`comment-${draft.id}`} className="sr-only">
         Your comment
@@ -960,7 +957,7 @@ function MarginToggle({ folded, count }: { folded: boolean; count: number }) {
       aria-label={folded ? `Show the margin${waiting}` : "Fold the margin away"}
       title={folded ? `Show the suggestions and comments${waiting}` : "Fold the margin away: the writing takes its space"}
       onClick={() => writePref(PREF.marginFolded, folded ? "0" : "1")}
-      className="hidden shrink-0 flex-col items-center gap-1 rounded-md p-1 text-muted hover:bg-bg hover:text-ink lg:flex"
+      className="hidden shrink-0 flex-col items-center gap-1 rounded-md p-1 text-muted hover:bg-bg hover:text-ink lg:sticky lg:top-0 lg:flex"
     >
       <svg aria-hidden viewBox="0 0 16 16" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d={folded ? "M10 3.5 5.5 8l4.5 4.5" : "M6 3.5 10.5 8 6 12.5"} />
@@ -1009,75 +1006,138 @@ function SuggestionsPanel({
 
   const pick = (id: string) => editor.view.dispatch(editor.state.tr.setMeta(suggestKey, { pick: id }));
 
-  const draftBox = draft && (
-    <CommentDraft
-      key={draft.id}
-      draft={draft}
-      onCancel={onDraftDone}
-      onPost={(body) => {
-        store.put({ ...draft, body, created_at: new Date().toISOString() });
-        onDraftDone();
-      }}
-    />
-  );
-
-  if (!open.length && !undo) {
-    return (
-      <div>
-        <p className="label">Suggestions and comments</p>
-        {draftBox}
-        {!draft && (
-          <p className="text-sm text-muted">
-            {role === "owner"
-              ? "Suggestions and comments from the people you share with, and from Claude, appear here beside your essay. Highlight words to comment on them."
-              : role === "view"
-                ? "No suggestions or comments yet."
-                : "None yet. Your suggestions and comments appear here for the writer. Highlight words to comment on them."}
-          </p>
-        )}
-      </div>
-    );
-  }
-
   // In the order they come in the essay (where two start at the same place, the older first);
-  // ones whose words are gone go last.
-  const placed = open
+  // ones whose words are gone go last. A comment being written sits among them, at its words.
+  const placed = [...open, ...(draft ? [draft] : [])]
     .map((s, i) => {
       const r = resolveSuggestion(editor.state, s);
       return { s, r, i, pos: r.from ?? r.at ?? Number.MAX_SAFE_INTEGER };
     })
     .sort((x, y) => x.pos - y.pos || x.i - y.i);
+
+  // Beside the writing (a wide screen), each card sits level with its words, moved down only as
+  // far as the card above it needs. Below the writing (a narrow one), they are a plain list.
+  const wide = useMedia("(min-width: 64rem)");
+  const listRef = useRef<HTMLUListElement>(null);
+  const [spots, setSpots] = useState<{ tops: Record<string, number>; height: number }>({ tops: {}, height: 0 });
+  const [, again] = useState(0);
+  useEffect(() => {
+    // The words move when the essay changes, and when anything above or around it changes size.
+    const redo = () => again((n) => n + 1);
+    editor.on("update", redo);
+    window.addEventListener("resize", redo);
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(redo);
+    ro?.observe(editor.view.dom);
+    const section = editor.view.dom.closest("section");
+    if (section) ro?.observe(section);
+    return () => {
+      editor.off("update", redo);
+      window.removeEventListener("resize", redo);
+      ro?.disconnect();
+    };
+  }, [editor]);
+  // After every render: the cards' own heights decide the places, and a place that hasn't changed
+  // sets nothing, so this settles at once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    const ul = listRef.current;
+    if (!ul || !wide) return;
+    const base = ul.getBoundingClientRect().top;
+    const tops: Record<string, number> = {};
+    let floor = 0;
+    for (const { s, r } of placed) {
+      const el = ul.querySelector<HTMLElement>(`[data-card="${s.id}"]`);
+      if (!el) continue;
+      const pos = r.from ?? r.at;
+      let want = floor;
+      if (pos !== null) {
+        try {
+          want = editor.view.coordsAtPos(pos).top - base - 6;
+        } catch {
+          // A position the editor can't place right now: it goes after the one above.
+        }
+      }
+      const top = Math.round(Math.max(want, floor));
+      tops[s.id] = top;
+      floor = top + el.offsetHeight + 8;
+    }
+    setSpots((prev) => {
+      const ids = Object.keys(tops);
+      const same = prev.height === floor && ids.length === Object.keys(prev.tops).length && ids.every((id) => prev.tops[id] === tops[id]);
+      return same ? prev : { tops, height: floor };
+    });
+  });
+  const spot = (id: string) => (wide ? { top: spots.tops[id] ?? 0 } : undefined);
+  const CARD_AT = "lg:absolute lg:inset-x-0";
+
+  if (!placed.length && !undo) {
+    return (
+      <div className="bg-bg lg:sticky lg:top-0">
+        <p className="label">Suggestions and comments</p>
+        <p className="text-sm text-muted">
+          {role === "owner"
+            ? "Suggestions and comments from the people you share with, and from Claude, appear here beside the words they are about. Highlight words to comment on them."
+            : role === "view"
+              ? "No suggestions or comments yet."
+              : "None yet. Your suggestions and comments appear here for the writer, beside the words they are about. Highlight words to comment on them."}
+        </p>
+      </div>
+    );
+  }
+
   const comments = open.filter((s) => s.kind === "comment").length;
   const counts = [open.length - comments ? `${open.length - comments} suggestion${open.length - comments === 1 ? "" : "s"}` : "", comments ? `${comments} comment${comments === 1 ? "" : "s"}` : ""]
     .filter(Boolean)
     .join(", ");
   return (
-    <div>
-      <p className="label">Suggestions and comments{counts && ` (${counts})`}</p>
-      {draftBox}
-      {undo && (
-        <p className="mb-2 flex items-center justify-between rounded-md bg-accent-soft px-2 py-1 text-sm" role="status">
-          {undo.label}
-          <button
-            type="button"
-            className="underline"
-            onClick={() => {
-              undo.run();
-              setUndo(null);
-            }}
-          >
-            Undo
-          </button>
-        </p>
-      )}
-      <ul className="flex flex-col gap-2" aria-label="Suggestions and comments">
+    <div className="flex h-full flex-col">
+      {/* The heading follows the essay down; the cards stay beside their words. */}
+      <div className="z-10 bg-bg pb-1 lg:sticky lg:top-0" data-testid="margin-heading">
+        <p className="label">Suggestions and comments{counts && ` (${counts})`}</p>
+        {undo && (
+          <p className="mb-1 flex items-center justify-between rounded-md bg-accent-soft px-2 py-1 text-sm" role="status">
+            {undo.label}
+            <button
+              type="button"
+              className="underline"
+              onClick={() => {
+                undo.run();
+                setUndo(null);
+              }}
+            >
+              Undo
+            </button>
+          </p>
+        )}
+      </div>
+      <ul
+        ref={listRef}
+        className="relative flex flex-1 flex-col gap-2 lg:block"
+        style={wide ? { minHeight: spots.height } : undefined}
+        aria-label="Suggestions and comments"
+      >
         {placed.map(({ s, r }) => {
+          if (draft && s.id === draft.id) {
+            return (
+              <li key={s.id} data-card={s.id} className={CARD_AT} style={spot(s.id)}>
+                <CommentDraft
+                  draft={draft}
+                  onCancel={onDraftDone}
+                  onPost={(body) => {
+                    store.put({ ...draft, body, created_at: new Date().toISOString() });
+                    onDraftDone();
+                  }}
+                />
+              </li>
+            );
+          }
           if (s.kind === "comment") {
             return (
               <li
                 key={s.id}
                 data-card={s.id}
-                className={`rounded-md border p-2 text-sm ${CARD.comment} ${picked === s.id ? "ring-2 ring-accent" : ""}`}
+                className={`rounded-md border p-2 text-sm ${CARD_AT} ${CARD.comment} ${picked === s.id ? "ring-2 ring-accent" : ""}`}
+                style={spot(s.id)}
                 data-testid="comment"
               >
                 <button type="button" className="block w-full text-left" onClick={() => pick(s.id)}>
@@ -1123,7 +1183,8 @@ function SuggestionsPanel({
             <li
               key={s.id}
               data-card={s.id}
-              className={`rounded-md border p-2 text-sm ${CARD[s.kind]} ${picked === s.id ? "ring-2 ring-accent" : ""}`}
+              className={`rounded-md border p-2 text-sm ${CARD_AT} ${CARD[s.kind]} ${picked === s.id ? "ring-2 ring-accent" : ""}`}
+              style={spot(s.id)}
               data-testid="suggestion"
               data-kind={s.kind}
             >
