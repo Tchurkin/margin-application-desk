@@ -18,7 +18,14 @@ function outcome(error: { code?: string } | null): BackendResult {
 const missingColumn = (e: { code?: string } | null) => e?.code === "42703" || e?.code === "PGRST204";
 
 export class SupabaseSuggestionBackend implements SuggestionBackend {
-  constructor(private supabase: SupabaseClient) {}
+  /**
+   * `onBehind` hears when the database refuses a kind of suggestion it doesn't know yet (a
+   * comment, before migration 20261022). It stays parked here and is sent once the database has it.
+   */
+  constructor(
+    private supabase: SupabaseClient,
+    private opts: { onBehind?: (kind: Suggestion["kind"]) => void } = {},
+  ) {}
 
   async list(pieceId: string) {
     const query = (cols: string) =>
@@ -54,6 +61,8 @@ export class SupabaseSuggestionBackend implements SuggestionBackend {
       delete row.context;
       ({ error } = await this.supabase.from("suggestions").upsert(row, { onConflict: "id" }));
     }
+    // A check the database fails it on: its kind is newer than the database. Kept, and retried.
+    if (error?.code === "23514") this.opts.onBehind?.(s.kind);
     return outcome(error);
   }
 

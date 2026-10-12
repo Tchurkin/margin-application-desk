@@ -160,6 +160,8 @@ export function PieceEditor({
   const [live, setLive] = useState<Live | null>(null);
   const [status, setStatus] = useState<SyncStatus>("loading");
   const [loadError, setLoadError] = useState<string | null>(null);
+  // The database refused a comment: it hasn't had its update for comments (migration 20261022).
+  const [commentsBehind, setCommentsBehind] = useState(false);
   const [people, setPeople] = useState<Person[]>([]);
   const [title, setTitle] = useState(piece.title);
   const [prompt, setPrompt] = useState(piece.prompt);
@@ -289,7 +291,8 @@ export function PieceEditor({
       readOnly: role !== "owner" && role !== "edit",
       onStatus: (st) => alive && setStatus(st),
     });
-    const store = new SuggestionStore(piece.id, new SupabaseSuggestionBackend(supabase), storage, clientId);
+    const backend = new SupabaseSuggestionBackend(supabase, { onBehind: () => alive && setCommentsBehind(true) });
+    const store = new SuggestionStore(piece.id, backend, storage, clientId);
     const person: Person = { name: me.name, color: colorFor(me.id), role };
     const channel = new PieceChannel(supabase, piece.id, sync.doc, person, {
       onUpdateRow: (row) => sync.applyRemoteRow(row),
@@ -619,6 +622,13 @@ export function PieceEditor({
       {/* It runs the height of the writing, each card beside its words; its heading and caret stay in view. */}
       <aside className="flex items-start gap-2" aria-label="Margin">
         <div id="essay-margin" className={`min-w-0 flex-1 self-stretch ${marginFolded ? "lg:hidden" : ""}`}>
+          {commentsBehind && (
+            <p className="mb-2 rounded-md border border-warn/40 bg-warn-soft px-2 py-1 text-xs text-warn" role="alert" data-testid="comments-behind">
+              {owner
+                ? "Comments can't be saved yet: your desk's database needs its latest update (run supabase/setup.sql in Supabase). Yours are kept on this device and sent once it's done."
+                : "Comments can't be saved yet: this desk needs an update from its owner. Yours are kept on this device and sent once it's done."}
+            </p>
+          )}
           {live && editor ? (
             <SuggestionsPanel live={live} editor={editor} role={role} me={me.id} draft={draft} onDraftDone={endComment} />
           ) : (
