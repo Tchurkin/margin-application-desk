@@ -7,7 +7,7 @@ Never commit real essays, names or keys.
 
 ## Layout
 
-- `src/lib/domain/`: pure logic (history thinning, counts, board, Common App cap), unit-tested
+- `src/lib/domain/`: pure logic (counts, board, Common App cap), unit-tested
 - `src/lib/sync/`: Yjs save engine (append-only `piece_updates`, edits parked in localStorage until acked)
 - `supabase/migrations/`: schema; RLS on every table through `can_read_desk` / `can_write_desk`
 - `e2e/`: Playwright against a local Supabase (needs Docker)

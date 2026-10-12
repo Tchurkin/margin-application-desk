@@ -128,8 +128,8 @@ export default function PrivacyPage() {
           <strong>The Trash:</strong> a deleted essay or college waits there for 30 days, then is deleted for good.
         </li>
         <li>
-          <strong>Version history:</strong> older versions are thinned out over time (hourly, then daily, then weekly) and kept as
-          long as the essay.
+          <strong>Version history:</strong> every version saved while you write (about one a minute) is kept for as long as the
+          essay.
         </li>
         <li>We don&apos;t keep backups of the database, so what you delete is gone.</li>
         <li>

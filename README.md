@@ -26,9 +26,8 @@ each assistant may do**, and every direct change is kept in the piece's history.
 - **Recommenders**, each in a color of their own, and which colleges each one writes for (not
   asked yet, asked, submitted), added by you or by Claude.
 - **Notes** per piece, kept outside the essay and never counted.
-- **Version history** thinned by age: everything from the last hour, then one an hour back to
-  a day, one a day back to a week, one a week before that, always keeping the first version
-  and the newest. Restore any of them.
+- **Version history**: a version about every minute while you write, every one kept for as
+  long as the piece. Compare any of them with now, and restore it.
 - **The board is home**, and Write reopens the piece you were last on.
 - **Sign in with an emailed code** or with Google, no password (once it's set up: see
   [docs/sign-in.md](docs/sign-in.md)).
@@ -111,7 +110,7 @@ npm run dev                 # http://localhost:3000
 ## Tests
 
 ```bash
-npm test                    # unit tests: version thinning, counts, the board, the sync engine
+npm test                    # unit tests: counts, the board, the sync engine, suggestions
 npm run test:e2e            # browser tests; needs the local Supabase from option A
 ```
 
