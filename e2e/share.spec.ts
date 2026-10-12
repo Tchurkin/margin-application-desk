@@ -363,6 +363,23 @@ test("each suggestion sits beside the words it is about, and the margin's headin
   await expect(suggestions(page).nth(0)).not.toBeInViewport();
 });
 
+test("commenting far down a long essay doesn't jump the page to the top", async ({ page }) => {
+  await studentWith(page, "nojump", "");
+  await essay(page).click();
+  await page.keyboard.insertText(Array.from({ length: 80 }, (_, i) => `Paragraph ${i + 1} of a long essay.`).join("\n"));
+  await waitSaved(page);
+  await page.keyboard.press("Control+End");
+  for (let i = 0; i < 6; i++) await page.keyboard.press("Shift+ArrowLeft");
+  const words = essay(page).getByText("Paragraph 80 of a long essay.");
+  await expect(words).toBeInViewport();
+  await page.getByTestId("comment-button").click();
+  const draft = page.getByTestId("comment-draft");
+  await expect(draft).toBeInViewport();
+  await expect(draft.getByLabel("Your comment")).toBeFocused();
+  await expect(words).toBeInViewport();
+  await expect(essay(page).getByText("Paragraph 1 of a long essay.", { exact: true })).not.toBeInViewport();
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");

@@ -887,6 +887,10 @@ function CommentButton({ editor, onComment }: { editor: Editor; onComment: () =>
 function CommentDraft({ draft, onPost, onCancel }: { draft: Suggestion; onPost: (body: string) => void; onCancel: () => void }) {
   const [body, setBody] = useState("");
   const post = () => body.trim() && onPost(body.trim());
+  // Focused without scrolling: it appears beside the highlighted words, which are already in view
+  // (autoFocus would scroll to where it is for an instant before it is placed: the top).
+  const box = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => box.current?.focus({ preventScroll: true }), []);
   return (
     <div className="rounded-md border border-warn/40 bg-warn-soft p-2 text-sm" data-testid="comment-draft">
       <p className="mb-1 font-serif text-muted italic break-words">“{cut(draft.quote)}”</p>
@@ -897,7 +901,7 @@ function CommentDraft({ draft, onPost, onCancel }: { draft: Suggestion; onPost: 
         id={`comment-${draft.id}`}
         className="field min-h-16 w-full resize-y"
         rows={3}
-        autoFocus
+        ref={box}
         value={body}
         placeholder="Add a comment…"
         onChange={(e) => setBody(e.target.value)}
