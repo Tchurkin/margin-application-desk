@@ -785,7 +785,8 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
           else if (event.key === "Home" && plain && !event.shiftKey) editOwn(view, opts, { type: "to", at: "start" });
           else if (event.key === "End" && plain && !event.shiftKey) editOwn(view, opts, { type: "to", at: "end" });
           else if (event.key === "Escape") setEditing(view, null);
-          else if (["Shift", "Control", "Meta", "Alt"].includes(event.key)) return false;
+          // Typing (it arrives as text, which goes into the suggestion) and keys that only set up typing.
+          else if ((event.key.length === 1 && !mod) || ["Shift", "Control", "Meta", "Alt", "Dead", "Process", "Unidentified", "CapsLock"].includes(event.key)) return false;
           else {
             // Anything else (another way of moving, undo, a shortcut): back in the essay, then as usual.
             setEditing(view, null);
@@ -796,7 +797,9 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
             return true;
           }
         }
-        // Just after my own suggested text, ← steps back into it.
+        // Just after my own suggested text, ← steps back into it. (Where the caret really is: the
+        // editor can be a keystroke behind the browser, after Ctrl+End say.)
+        if (event.key === "ArrowLeft" && !mod && !event.altKey && !event.shiftKey) syncSelection(view);
         if (event.key === "ArrowLeft" && !mod && !event.altKey && !event.shiftKey && view.state.selection.empty) {
           const own = myInsertAt(view.state, opts, view.state.selection.from);
           if (own?.body && startEditing(view, opts, own.id, own.body.length - charBefore(own.body, own.body.length))) {

@@ -94,6 +94,23 @@ describe("changing your own suggestion", () => {
     expect(store.open().some((s) => s.kind === "insert")).toBe(false);
   });
 
+  it("typed keys stay in the suggestion; ← just after it steps in", () => {
+    const { ed, view, store, opts } = suggesting("The cat sat.");
+    const end = ed.state.doc.content.size - 1;
+    suggestText(view, opts, end, end, " Very quiet.");
+    const key = (k: string) => view.someProp("handleKeyDown", (f) => f(view, new KeyboardEvent("keydown", { key: k })));
+    // The caret is just after the suggestion: ← goes in, before the ".".
+    expect(key("ArrowLeft")).toBe(true);
+    expect(caret(ed)?.offset).toBe(" Very quiet".length);
+    for (let i = 0; i < 6; i++) key("ArrowLeft");
+    for (let i = 0; i < 5; i++) key("Backspace");
+    // A letter's keydown leaves it to the typed text, which goes in at the caret.
+    expect(key(" ")).toBeFalsy();
+    expect(caret(ed)).not.toBeNull();
+    view.someProp("handleTextInput", (f) => f(view, end, end, " so", () => view.state.tr));
+    expect(mine(store).body).toBe(" so quiet.");
+  });
+
   it("only your own", () => {
     const { view, store, opts } = suggesting("One.");
     suggestText(view, opts, 1, 1, "Ab");
