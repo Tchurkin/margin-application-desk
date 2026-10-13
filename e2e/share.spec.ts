@@ -432,6 +432,71 @@ test("the student saves a named version by hand, and finds it in History", async
   await expect(page.getByTestId("version-compare")).toContainText("Sent to Mom");
 });
 
+test("Ctrl+Z takes back an accept: the text and the suggestion both come back", async ({ page, browser }) => {
+  await studentWith(page, "undoaccept", "The cat sat.");
+  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  await openShared(mom, "Shared essay");
+  await essay(mom).click();
+  await mom.keyboard.press("Control+Home");
+  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
+  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await mom.keyboard.type("dog");
+  await expect(suggestions(page)).toHaveCount(1);
+
+  await suggestions(page).first().getByRole("button", { name: "Accept" }).click();
+  await expectEssay(page, "The dog sat.");
+  await expect(suggestions(page)).toHaveCount(0);
+  await page.keyboard.press("Control+z");
+  await expectEssay(page, "The cat sat.");
+  await expect(suggestions(page)).toHaveCount(1);
+  // And it can be accepted again, and it stays.
+  await suggestions(page).first().getByRole("button", { name: "Accept" }).click();
+  await expectEssay(page, "The dog sat.");
+  await page.reload();
+  await expectEssay(page, "The dog sat.");
+});
+
+test("a parent's awkward suggestions across paragraphs all go in when the student accepts them", async ({ page, browser }) => {
+  await studentWith(page, "awkward", "");
+  await essay(page).click();
+  await page.keyboard.insertText("First paragraph here.\nSecond paragraph here.\nThird one.");
+  await waitSaved(page);
+  const dad = await join(browser, await makeLink(page, { role: "suggest" }), "Dad");
+  await openShared(dad, "Shared essay");
+  await essay(dad).click();
+  // 1. At the very start of the second paragraph.
+  await dad.keyboard.press("Control+Home");
+  await dad.keyboard.press("ArrowDown");
+  await dad.keyboard.press("Home");
+  await dad.keyboard.type("Also, ");
+  await expect(suggestions(page)).toHaveCount(1);
+  // 2. A new paragraph after the first (Enter, then words).
+  await dad.keyboard.press("Control+Home");
+  await dad.keyboard.press("End");
+  await dad.keyboard.press("Enter");
+  await dad.keyboard.type("A new one.");
+  await expect(suggestions(page)).toHaveCount(2);
+  // 3. Joining the third paragraph onto the second (Backspace at its start).
+  await dad.keyboard.press("Control+End");
+  await dad.keyboard.press("Home");
+  await dad.keyboard.press("Backspace");
+  await expect(suggestions(page)).toHaveCount(3);
+
+  const text = () => essay(page).evaluate((el) => (el as HTMLElement).innerText.replace(/\n+/g, "\n").trim());
+  const before = await text();
+  for (let i = 0; i < 3; i++) {
+    const card = suggestions(page).first();
+    const was = await text();
+    await card.getByRole("button", { name: "Accept" }).click();
+    await expect.poll(text, { message: `accepting suggestion ${i + 1} should change the essay` }).not.toBe(was);
+  }
+  await expect(suggestions(page)).toHaveCount(0);
+  expect(await text()).not.toBe(before);
+  const after = await text();
+  await page.reload();
+  await expect.poll(text).toBe(after);
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");

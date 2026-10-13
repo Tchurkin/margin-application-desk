@@ -1033,6 +1033,35 @@ function SuggestionsPanel({
     const t = setTimeout(() => setUndo(null), 8000);
     return () => clearTimeout(t);
   }, [undo]);
+  // The last accept, decline or resolve, which Ctrl+Z takes back (text and card both) while the
+  // essay hasn't changed since. The essay's own undo would only take back the text.
+  const recent = useRef<{ run: () => void; doc: Editor["state"]["doc"] } | null>(null);
+  const [problem, setProblem] = useState<{ id: string; text: string } | null>(null);
+  const did = (label: string, run: () => void) => {
+    setUndo({ label, run });
+    recent.current = { run, doc: editor.state.doc };
+    setProblem(null);
+  };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z") return;
+      const r = recent.current;
+      if (!r || editor.isDestroyed || editor.state.doc !== r.doc) return;
+      const at = document.activeElement as HTMLElement | null;
+      if (at && at !== document.body && !editor.view.dom.contains(at) && !at.closest("#essay-margin")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      recent.current = null;
+      setUndo(null);
+      r.run();
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [editor]);
+  /** Back to the essay after a button in the margin, without scrolling it. */
+  const backToEssay = () => {
+    if (!editor.isDestroyed) editor.view.dom.focus({ preventScroll: true });
+  };
 
   const pick = (id: string) => editor.view.dispatch(editor.state.tr.setMeta(suggestKey, { pick: id }));
 
@@ -1194,7 +1223,8 @@ function SuggestionsPanel({
                       className="btn"
                       onClick={() => {
                         store.resolve(s.id, "accepted");
-                        setUndo({ label: "Resolved.", run: () => store.resolve(s.id, "open") });
+                        did("Resolved.", () => store.resolve(s.id, "open"));
+                        backToEssay();
                       }}
                     >
                       Resolve
@@ -1235,6 +1265,11 @@ function SuggestionsPanel({
                   </span>
                 )}
               </button>
+              {problem?.id === s.id && (
+                <p className="mt-1 text-xs text-danger" role="alert">
+                  {problem.text}
+                </p>
+              )}
               <div className="mt-2 flex gap-2">
                 {role === "owner" && (
                   <>
@@ -1243,15 +1278,19 @@ function SuggestionsPanel({
                       className="btn btn-primary"
                       disabled={r.gone && s.kind !== "insert"}
                       onClick={() => {
-                        if (!acceptInto(editor.view, s)) return;
+                        const before = editor.state.doc;
+                        // Only marked accepted once the essay has really changed.
+                        if (!acceptInto(editor.view, s) || editor.state.doc.eq(before)) {
+                          console.warn("Accepting a suggestion changed nothing", { kind: s.kind, resolved: { from: r.from, to: r.to, at: r.at, stale: r.stale, gone: r.gone }, quote: s.quote, body: s.body });
+                          setProblem({ id: s.id, text: "This one couldn't be put in: its words may have changed since. Make the change by hand, or decline it." });
+                          return;
+                        }
                         store.resolve(s.id, "accepted");
-                        setUndo({
-                          label: "Accepted.",
-                          run: () => {
-                            editor.commands.undo();
-                            store.resolve(s.id, "open");
-                          },
+                        did("Accepted.", () => {
+                          editor.commands.undo();
+                          store.resolve(s.id, "open");
                         });
+                        backToEssay();
                       }}
                     >
                       Accept
@@ -1261,7 +1300,8 @@ function SuggestionsPanel({
                       className="btn"
                       onClick={() => {
                         store.resolve(s.id, "declined");
-                        setUndo({ label: "Declined.", run: () => store.resolve(s.id, "open") });
+                        did("Declined.", () => store.resolve(s.id, "open"));
+                        backToEssay();
                       }}
                     >
                       Decline
