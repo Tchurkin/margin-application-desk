@@ -246,7 +246,7 @@ export function resolveSuggestion(state: EditorState, s: Suggestion): Resolved {
       for (const len of [context.length, 60, 30]) {
         if (len > context.length) continue;
         const f = findText(dt.hay, context.slice(-len), near);
-        if ("start" in f) return { s, from: null, to: null, at: dt.posTo(f.end), stale: len < context.length, gone: false };
+        if ("start" in f) return { s, from: null, to: null, at: clampToText(state.doc, dt.posTo(f.end)), stale: len < context.length, gone: false };
       }
     }
     // Its anchor holds but the words before it changed: the student decides. A loose anchor
@@ -501,6 +501,11 @@ export function suggestText(view: EditorView, opts: SuggestOptions, from: number
     const s = myInsertAt(state, opts, from);
     if (s) {
       store.put({ ...s, body: s.body + text });
+    } else if (startsParagraph(state, from)) {
+      // At the start of a paragraph: tied to its first letter, which it stays in front of
+      // whatever is added or split before it. (Tied to the break before it, as other
+      // insertions are tied to the letter before them, it went wherever that break went.)
+      store.put({ ...base(opts, "insert"), anchor_from: anchorAt(state, from, 0), body: text, context: "" });
     } else {
       store.put({ ...base(opts, "insert"), anchor_from: anchorAt(state, from, -1), body: text, context: textBefore(state, from) });
     }
@@ -528,6 +533,12 @@ function suggestDelete(view: EditorView, opts: SuggestOptions, from: number, to:
     quote: textBetweenPos(docText(state.doc), from, to),
   });
   moveCaret(view, caret);
+}
+
+/** `pos` is the start of a paragraph that has text after it. */
+function startsParagraph(state: EditorState, pos: number): boolean {
+  const $p = state.doc.resolve(pos);
+  return $p.parent.inlineContent && $p.parentOffset === 0 && $p.parent.content.size > 0;
 }
 
 /** The text just before `pos`, kept with an insertion so it can be found again. */
@@ -727,6 +738,9 @@ export function acceptInto(view: EditorView, s: Suggestion): boolean {
       insertLines(tr, at, s.body);
     }
   }
+  // Text the document can't take where it points (between paragraphs, say) is dropped by the
+  // editor without a word: then it isn't accepted.
+  if (!tr.docChanged) return false;
   view.dispatch(tr.setMeta(DIRECT_EDIT, true));
   return true;
 }

@@ -107,6 +107,27 @@ describe.each(["owner", "suggest"] as const)("accepting in %s mode", (mode) => {
     expect(ed.getText()).toBe("The cat sat. Quietly.");
   });
 
+  it("words typed at the start of a paragraph go in, after another suggestion before them is accepted", () => {
+    const ydoc = essayDoc("First paragraph here.", "Second paragraph here.", "Third one.");
+    const parentDoc = new Y.Doc();
+    Y.applyUpdate(parentDoc, Y.encodeStateAsUpdate(ydoc));
+    const dad = open(parentDoc, "suggest", { id: "dad", name: "Dad" });
+    const startOf2 = 1 + "First paragraph here.".length + 2;
+    suggestText(dad.ed.view, dad.opts, startOf2, startOf2, "Also, ");
+    const endOf1 = 1 + "First paragraph here.".length;
+    suggestText(dad.ed.view, dad.opts, endOf1, endOf1, "\nA new one.");
+    const [also, newOne] = ["Also, ", "\nA new one."].map((b) => dad.store.open().find((x) => x.body === b)!);
+
+    const { ed, store } = open(ydoc, mode);
+    store.applyRemote(also);
+    store.applyRemote(newOne);
+    expect(accept(ed, store, store.get(newOne.id)!)).toBe(true);
+    const before = ed.getText({ blockSeparator: "\n" });
+    expect(accept(ed, store, store.get(also.id)!)).toBe(true);
+    expect(ed.getText({ blockSeparator: "\n" })).not.toBe(before);
+    expect(ed.getText({ blockSeparator: "\n" })).toBe("First paragraph here.\nA new one.\nAlso, Second paragraph here.\nThird one.");
+  });
+
   it("after the student has typed elsewhere since it was suggested", () => {
     const ydoc = essayDoc("The cat sat.", "Second line.");
     const row = fromAI(ydoc, "Second", { replace_with: "Next" });
