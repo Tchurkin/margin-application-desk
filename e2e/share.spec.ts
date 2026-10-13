@@ -464,11 +464,12 @@ test("a parent's awkward suggestions across paragraphs all go in when the studen
   await waitSaved(page);
   const dad = await join(browser, await makeLink(page, { role: "suggest" }), "Dad");
   await openShared(dad, "Shared essay");
+  await expectEssayContains(dad, "Third one.");
   await essay(dad).click();
   // 1. At the very start of the second paragraph.
   await dad.keyboard.press("Control+Home");
-  await dad.keyboard.press("ArrowDown");
-  await dad.keyboard.press("Home");
+  await dad.keyboard.press("End");
+  await dad.keyboard.press("ArrowRight");
   await dad.keyboard.type("Also, ");
   await expect(suggestions(page)).toHaveCount(1);
   // 2. A new paragraph after the first (Enter, then words).
@@ -483,19 +484,24 @@ test("a parent's awkward suggestions across paragraphs all go in when the studen
   await dad.keyboard.press("Backspace");
   await expect(suggestions(page)).toHaveCount(3);
 
-  const text = () => essay(page).evaluate((el) => (el as HTMLElement).innerText.replace(/\n+/g, "\n").trim());
-  const before = await text();
+  // The essay's own paragraphs, without the suggestions drawn in them.
+  const paragraphs = () =>
+    essay(page).evaluate((el) => {
+      const c = el.cloneNode(true) as HTMLElement;
+      c.querySelectorAll(".ProseMirror-widget, .collaboration-carets__caret").forEach((n) => n.remove());
+      return [...c.querySelectorAll("p")].map((p) => p.textContent ?? "");
+    });
+  expect(await paragraphs()).toEqual(["First paragraph here.", "Second paragraph here.", "Third one."]);
   for (let i = 0; i < 3; i++) {
-    const card = suggestions(page).first();
-    const was = await text();
-    await card.getByRole("button", { name: "Accept" }).click();
-    await expect.poll(text, { message: `accepting suggestion ${i + 1} should change the essay` }).not.toBe(was);
+    const was = JSON.stringify(await paragraphs());
+    await suggestions(page).first().getByRole("button", { name: "Accept" }).click();
+    await expect.poll(async () => JSON.stringify(await paragraphs()), { message: `accepting suggestion ${i + 1} should change the essay` }).not.toBe(was);
+    await expect(suggestions(page)).toHaveCount(2 - i);
   }
-  await expect(suggestions(page)).toHaveCount(0);
-  expect(await text()).not.toBe(before);
-  const after = await text();
+  const done = ["First paragraph here.", "A new one.", "Also, Second paragraph here.Third one."];
+  expect(await paragraphs()).toEqual(done);
   await page.reload();
-  await expect.poll(text).toBe(after);
+  await expect.poll(paragraphs).toEqual(done);
 });
 
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
