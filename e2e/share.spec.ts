@@ -403,9 +403,10 @@ test("a suggester changes their own suggestion in the middle, with the keys or b
   // Clicking into it puts the caret there too.
   await essay(mom).locator(".sugg-ins").click();
   await expect(essay(mom).locator(".sugg-caret")).toHaveCount(1);
+  // It goes in where the click was, somewhere in " so quiet.": one character longer, nothing lost.
   await mom.keyboard.type("!");
   await expect(suggestions(page)).toContainText("!");
-  await expect(suggestions(page)).toContainText("quiet");
+  await expect.poll(async () => (await essay(mom).locator(".sugg-ins").innerText()).replace("!", "")).toBe(" so quiet.");
   await expect(suggestions(page)).toHaveCount(1);
   await expectEssay(page, "The cat sat.");
 });
