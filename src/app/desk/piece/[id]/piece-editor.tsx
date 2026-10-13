@@ -253,6 +253,14 @@ export function PieceEditor({
     }
   }
 
+  // Saving a version by hand, from History, with a name if the student gives one.
+  const saveNow = async (label: string) => {
+    if (!editor || editor.isDestroyed) return false;
+    const ok = await saveVersion(supabase, piece.id, me.name, editor.getJSON(), textOf(editor), label).catch(() => false);
+    if (ok) setHistoryTick((t) => t + 1);
+    return ok;
+  };
+
   const openCompare = (versions: VersionRow[], id: string) => {
     setRestore({ busy: false, error: null });
     setCompare({ versions, id });
@@ -659,7 +667,15 @@ export function PieceEditor({
       countNow={countLabel({ words: countWords(text), chars: countChars(text), kind: limitKind, limit: limitValue })}
       status={pieceStatus}
       editor={editor}
-      history={<History pieceId={piece.id} comparingId={compare?.id ?? null} onCompare={openCompare} tick={historyTick} />}
+      history={
+        <History
+          pieceId={piece.id}
+          comparingId={compare?.id ?? null}
+          onCompare={openCompare}
+          tick={historyTick}
+          onSave={owner && editor ? saveNow : undefined}
+        />
+      }
       onDeleteCurrent={async () => {
         await live?.sync.flush().catch(() => {});
         live?.sync.discard();
@@ -1275,22 +1291,83 @@ function History({
   comparingId,
   onCompare,
   tick,
+  onSave,
 }: {
   pieceId: string;
   comparingId: string | null;
   onCompare: (versions: VersionRow[], id: string) => void;
-  /** Bumped after a restore, to list the version it saved. */
+  /** Bumped after a restore or a save, to list the version it saved. */
   tick: number;
+  /** Save the piece as it is now as a version, with an optional name (the student only). */
+  onSave?: (label: string) => Promise<boolean>;
 }) {
   const supabase = supabaseBrowser();
-  const [versions, setVersions] = useState<VersionRow[] | null>(null);
+  const [all, setVersions] = useState<VersionRow[] | null>(null);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState<"idle" | "busy" | "saved" | "failed">("idle");
+  const [namedOnly, setNamedOnly] = useState(false);
 
   useEffect(() => {
     listVersions(supabase, pieceId).then(setVersions, () => setVersions([]));
   }, [supabase, pieceId, tick]);
+  useEffect(() => {
+    if (saving !== "saved") return;
+    const t = setTimeout(() => setSaving("idle"), 3000);
+    return () => clearTimeout(t);
+  }, [saving]);
+
+  const named = all?.some((v) => v.label) ?? false;
+  const versions = all && namedOnly && named ? all.filter((v) => v.label) : all;
 
   return (
     <div className="flex flex-col gap-2 p-3">
+      {onSave && (
+        <form
+          className="flex flex-col gap-1.5"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (saving === "busy") return;
+            setSaving("busy");
+            void onSave(name).then((ok) => {
+              setSaving(ok ? "saved" : "failed");
+              if (ok) setName("");
+            });
+          }}
+        >
+          <label htmlFor={`${pieceId}-version-name`} className="text-xs text-muted">
+            Save the piece as it is now, to find it again later
+          </label>
+          <div className="flex gap-1.5">
+            <input
+              id={`${pieceId}-version-name`}
+              className="field min-w-0 flex-1 text-sm"
+              value={name}
+              maxLength={120}
+              placeholder="Name it (optional)"
+              onChange={(e) => setName(e.target.value)}
+            />
+            <button type="submit" className="btn btn-primary shrink-0" disabled={saving === "busy"}>
+              Save version
+            </button>
+          </div>
+          {saving === "saved" && (
+            <p className="text-xs text-add" role="status">
+              Saved.
+            </p>
+          )}
+          {saving === "failed" && (
+            <p className="text-xs text-danger" role="alert">
+              Couldn&apos;t save it. Check your connection and try again.
+            </p>
+          )}
+        </form>
+      )}
+      {named && (
+        <label className="flex items-center gap-1.5 text-xs text-muted">
+          <input type="checkbox" checked={namedOnly} onChange={(e) => setNamedOnly(e.target.checked)} />
+          Named versions only
+        </label>
+      )}
       {versions === null ? (
         <p className="text-sm text-muted">Loading…</p>
       ) : versions.length === 0 ? (
@@ -1306,8 +1383,13 @@ function History({
                   className={`flex w-full justify-between gap-2 px-2 py-1 text-left hover:bg-bg ${comparingId === v.id ? "bg-accent-soft" : ""}`}
                   onClick={() => onCompare(versions, v.id)}
                 >
-                  <span>{new Date(v.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}</span>
-                  <span className="text-muted">{v.words} words</span>
+                  <span className="min-w-0">
+                    {v.label && <span className="block font-medium break-words text-ink">{v.label}</span>}
+                    <span className={v.label ? "text-xs text-muted" : ""}>
+                      {new Date(v.at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-muted">{v.words} words</span>
                 </button>
               </li>
             ))}

@@ -17,7 +17,7 @@ create table if not exists average_app.migrations (version text primary key, nam
 
 do $setup$
 declare
-  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments'];
+  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names'];
   marked text[];
   cli text[] := '{}';
   have boolean[];
@@ -61,7 +61,8 @@ begin
     ('20261019000000' = any(marked)) or ('20261019000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'desk_requests' and column_name = 'asked_by')),
     ('20261020000000' = any(marked)) or ('20261020000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'counselor_answers_guests')),
     ('20261021000000' = any(marked)) or ('20261021000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'set_piece_notes')),
-    ('20261022000000' = any(marked)) or ('20261022000000' = any(cli)) or (coalesce(position('comment' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'suggestions_kind_check' and c.conrelid = to_regclass('public.suggestions')))) > 0, false))
+    ('20261022000000' = any(marked)) or ('20261022000000' = any(cli)) or (coalesce(position('comment' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'suggestions_kind_check' and c.conrelid = to_regclass('public.suggestions')))) > 0, false)),
+    ('20261023000000' = any(marked)) or ('20261023000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'piece_versions' and column_name = 'label'))
   ];
 
   for i in 1 .. array_length(names, 1) loop
@@ -4219,6 +4220,21 @@ $m20261022000000$;
     insert into average_app.migrations (version, name) values ('20261022000000', '20261022000000_comments');
     applied := applied + 1;
     raise notice 'Applied %', '20261022000000_comments' || case when late[30] then ' (it had been skipped)' else '' end;
+  end if;
+
+  if not have[31] then
+    execute $m20261023000000$
+-- Naming a version.
+--
+-- Braxton's call (10/12/26): the student can save a version by hand from History, and give it a
+-- name ("Sent to Mom", "Final before cutting") so it's easy to find among the ones saved as they
+-- write. Null when it has none: a Trash snapshot from before this column restores as it was.
+
+alter table public.piece_versions add column if not exists label text check (label is null or length(label) <= 120);
+$m20261023000000$;
+    insert into average_app.migrations (version, name) values ('20261023000000', '20261023000000_version_names');
+    applied := applied + 1;
+    raise notice 'Applied %', '20261023000000_version_names' || case when late[31] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

@@ -410,6 +410,28 @@ test("a suggester changes their own suggestion in the middle, with the keys or b
   await expectEssay(page, "The cat sat.");
 });
 
+test("the student saves a named version by hand, and finds it in History", async ({ page }) => {
+  await studentWith(page, "savever", "My first full draft.");
+  await page.getByRole("button", { name: "History", exact: true }).click();
+  await page.getByLabel("Save the piece as it is now, to find it again later").fill("Sent to Mom");
+  await page.getByRole("button", { name: "Save version" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Saved." })).toBeVisible();
+  const versions = page.getByRole("list", { name: "Saved versions" }).getByRole("button");
+  await expect(versions.first()).toContainText("Sent to Mom");
+
+  // Another, unnamed; "Named versions only" shows just the named one.
+  await essay(page).click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.type(" More.");
+  await waitSaved(page);
+  await page.getByRole("button", { name: "Save version" }).click();
+  await expect(versions.first()).not.toContainText("Sent to Mom");
+  await page.getByLabel("Named versions only").check();
+  await expect(versions).toHaveCount(1);
+  await versions.first().click();
+  await expect(page.getByTestId("version-compare")).toContainText("Sent to Mom");
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");

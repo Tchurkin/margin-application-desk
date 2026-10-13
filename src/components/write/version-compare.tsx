@@ -179,7 +179,7 @@ export function VersionCompare({
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-line px-4 py-3">
           <div className="min-w-0 flex-1">
             <h2 id={`${ids}-h`} className="font-serif text-lg">
-              {version ? `Version from ${when(version.at)}` : "Version"}
+              {version?.label ? `“${version.label}”, ${when(version.at)}` : version ? `Version from ${when(version.at)}` : "Version"}
               {version?.author ? <span className="text-sm text-muted"> · {version.author}</span> : null}
             </h2>
             <p className="text-xs text-muted" data-testid="diff-counts">
