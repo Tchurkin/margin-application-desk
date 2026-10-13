@@ -380,6 +380,36 @@ test("commenting far down a long essay doesn't jump the page to the top", async 
   await expect(essay(page).getByText("Paragraph 1 of a long essay.", { exact: true })).not.toBeInViewport();
 });
 
+test("a suggester changes their own suggestion in the middle, with the keys or by clicking into it", async ({ page, browser }) => {
+  await studentWith(page, "editown", "The cat sat.");
+  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  await openShared(mom, "Shared essay");
+  await essay(mom).click();
+  await mom.keyboard.press("Control+End");
+  await mom.keyboard.type(" Very quiet.");
+  await expect(suggestions(page)).toContainText("Add “ Very quiet.”");
+
+  // ← steps back into it (before the "."), five more to just after "Very"; take " Very" out, put " so" in.
+  for (let i = 0; i < 7; i++) await mom.keyboard.press("ArrowLeft");
+  await expect(essay(mom).locator(".sugg-caret")).toHaveCount(1);
+  for (let i = 0; i < 5; i++) await mom.keyboard.press("Backspace");
+  await mom.keyboard.type(" so");
+  await expect(suggestions(page)).toHaveCount(1);
+  await expect(suggestions(page)).toContainText("Add “ so quiet.”");
+  // → off its end goes back to the essay.
+  for (let i = 0; i < 8; i++) await mom.keyboard.press("ArrowRight");
+  await expect(essay(mom).locator(".sugg-caret")).toHaveCount(0);
+
+  // Clicking into it puts the caret there too.
+  await essay(mom).locator(".sugg-ins").click();
+  await expect(essay(mom).locator(".sugg-caret")).toHaveCount(1);
+  await mom.keyboard.type("!");
+  await expect(suggestions(page)).toContainText("!");
+  await expect(suggestions(page)).toContainText("quiet");
+  await expect(suggestions(page)).toHaveCount(1);
+  await expectEssay(page, "The cat sat.");
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");

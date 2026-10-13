@@ -38,7 +38,23 @@ export interface SuggestOptions {
   onPick?: (id: string) => void;
 }
 
-export const suggestKey = new PluginKey<{ tick: number; picked: string | null }>("suggest");
+/**
+ * Changing your own suggested text in place: the caret is inside that suggestion's text, `offset`
+ * characters in. Suggested text isn't part of the essay, so the browser's caret can't go there;
+ * the plugin draws one and makes the edits itself.
+ */
+export interface EditingOwn {
+  id: string;
+  offset: number;
+}
+
+interface SuggestState {
+  tick: number;
+  picked: string | null;
+  editing: EditingOwn | null;
+}
+
+export const suggestKey = new PluginKey<SuggestState>("suggest");
 
 /**
  * Marks a transaction as the student's own deliberate change (accepting a suggestion, restoring
@@ -262,19 +278,69 @@ export function resolveSuggestion(state: EditorState, s: Suggestion): Resolved {
 
 // ─── decorations ────────────────────────────────────────────────────────────
 
-function widget(s: Suggestion, mine: boolean, picked: boolean) {
+function widget(s: Suggestion, mine: boolean, picked: boolean, caret: number | null) {
   return () => {
     const el = document.createElement("span");
-    el.className = `sugg-ins${mine ? " sugg-mine" : ""}${picked ? " sugg-picked" : ""}`;
+    el.className = `sugg-ins${mine ? " sugg-mine" : ""}${picked ? " sugg-picked" : ""}${caret !== null ? " sugg-editing" : ""}`;
     el.dataset.sugg = s.id;
-    el.title = `${s.author_name || "Someone"} suggests adding this`;
-    fillParagraphs(el, s.body ?? "");
+    el.title = mine ? "Your suggestion: click into it to change it" : `${s.author_name || "Someone"} suggests adding this`;
+    if (caret === null) fillParagraphs(el, s.body ?? "");
+    else fillWithCaret(el, s.body ?? "", caret);
     return el;
   };
 }
 
+/** Like fillParagraphs, with a caret drawn `caret` characters in. */
+function fillWithCaret(el: HTMLElement, text: string, caret: number) {
+  const at = Math.max(0, Math.min(caret, text.length));
+  let start = 0;
+  text.split("\n").forEach((line, i) => {
+    const box = i === 0 ? el : document.createElement("span");
+    if (i > 0) {
+      box.className = "widget-para";
+      el.appendChild(box);
+    }
+    if (at >= start && at <= start + line.length) {
+      box.appendChild(document.createTextNode(line.slice(0, at - start)));
+      const mark = document.createElement("span");
+      mark.className = "sugg-caret";
+      mark.setAttribute("aria-hidden", "true");
+      box.appendChild(mark);
+      box.appendChild(document.createTextNode(line.slice(at - start) || (i > 0 && !line ? "\u00a0" : "")));
+    } else {
+      box.appendChild(document.createTextNode(line || (i > 0 ? "\u00a0" : "")));
+      if (i > 0 && !line) box.dataset.empty = "1";
+    }
+    start += line.length + 1;
+  });
+}
+
+/** How many characters into a suggestion's text a point in its drawn text is. */
+function offsetInWidget(el: HTMLElement, node: Node, nodeOffset: number): number {
+  const lines: HTMLElement[] = [el, ...Array.from(el.querySelectorAll<HTMLElement>(":scope > .widget-para"))];
+  const lineOf = (n: Node) => (n.parentElement?.closest(".widget-para") as HTMLElement | null) ?? el;
+  const target = lineOf(node.nodeType === Node.TEXT_NODE ? node : (node.firstChild ?? node));
+  let before = 0;
+  for (const line of lines) {
+    const own = (n: Node) => (line === el ? n.parentNode === el : line.contains(n));
+    const texts = Array.from(line.childNodes).filter((n) => n.nodeType === Node.TEXT_NODE && own(n));
+    const len = line.dataset.empty ? 0 : texts.reduce((a, t) => a + (t.textContent ?? "").length, 0);
+    if (line === target) {
+      let inLine = 0;
+      for (const t of texts) {
+        if (t === node) return before + inLine + Math.min(nodeOffset, (t.textContent ?? "").length);
+        inLine += (t.textContent ?? "").length;
+      }
+      return before + len;
+    }
+    before += len + 1;
+  }
+  return Math.max(0, before - 1);
+}
+
 function decorations(state: EditorState, opts: SuggestOptions): DecorationSet {
   const picked = suggestKey.getState(state)?.picked ?? null;
+  const editing = suggestKey.getState(state)?.editing ?? null;
   const decos: Decoration[] = [];
   for (const s of opts.store.open()) {
     const r = resolveSuggestion(state, s);
@@ -306,11 +372,12 @@ function decorations(state: EditorState, opts: SuggestOptions): DecorationSet {
       }
     }
     if (r.at !== null && s.body) {
+      const caret = editing?.id === s.id && mine ? editing.offset : null;
       // side -1: drawn before a caret sitting at the same spot, so typing continues after it.
       decos.push(
-        Decoration.widget(r.at, widget(s, mine, picked === s.id), {
+        Decoration.widget(r.at, widget(s, mine, picked === s.id, caret), {
           side: -1,
-          key: `${s.id}:${s.version}:${picked === s.id}`,
+          key: `${s.id}:${s.version}:${picked === s.id}:${caret ?? ""}`,
           marks: [],
         }),
       );
@@ -537,6 +604,85 @@ export function suggestForwardDelete(view: EditorView, opts: SuggestOptions) {
   suggestDelete(view, opts, pos, next, next);
 }
 
+// ─── changing your own suggested text ───────────────────────────────────────
+
+function editingOf(state: EditorState): EditingOwn | null {
+  return suggestKey.getState(state)?.editing ?? null;
+}
+
+function setEditing(view: EditorView, editing: EditingOwn | null) {
+  view.dispatch(view.state.tr.setMeta(suggestKey, { editing }).setMeta("addToHistory", false));
+}
+
+/** Start changing my suggestion `id` with the caret `offset` characters in (its text stays where it is). */
+export function startEditing(view: EditorView, opts: SuggestOptions, id: string, offset: number): boolean {
+  const s = opts.store.get(id);
+  if (!s || s.status !== "open" || s.author_id !== opts.me.id || !s.body || (s.kind !== "insert" && s.kind !== "replace")) return false;
+  const r = resolveSuggestion(view.state, s);
+  if (r.at === null) return false;
+  // The essay's caret waits just after the suggestion, where it goes back to.
+  const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, r.at));
+  view.dispatch(tr.setMeta(suggestKey, { editing: { id, offset: Math.max(0, Math.min(offset, s.body.length)) }, pick: id }).setMeta("addToHistory", false));
+  return true;
+}
+
+/** Characters (not halves of one) before and after `at` in `text`. */
+function charBefore(text: string, at: number) {
+  return at >= 2 && /[\uDC00-\uDFFF]/.test(text[at - 1]) && /[\uD800-\uDBFF]/.test(text[at - 2]) ? 2 : at >= 1 ? 1 : 0;
+}
+function charAfter(text: string, at: number) {
+  return at + 1 < text.length && /[\uD800-\uDBFF]/.test(text[at]) && /[\uDC00-\uDFFF]/.test(text[at + 1]) ? 2 : at < text.length ? 1 : 0;
+}
+
+/**
+ * One change to the suggestion being changed: typed text, Backspace, Delete, or a move. Emptied,
+ * an insertion is withdrawn and a replacement becomes a deletion.
+ */
+export function editOwn(
+  view: EditorView,
+  opts: SuggestOptions,
+  change: { type: "text"; text: string } | { type: "backspace" } | { type: "delete" } | { type: "move"; by: -1 | 1 } | { type: "to"; at: "start" | "end" },
+): void {
+  const ed = editingOf(view.state);
+  const s = ed && opts.store.get(ed.id);
+  if (!ed || !s || s.status !== "open") return setEditing(view, null);
+  const body = s.body ?? "";
+  const off = Math.min(ed.offset, body.length);
+  let next = body;
+  let at = off;
+  if (change.type === "text") {
+    next = body.slice(0, off) + change.text + body.slice(off);
+    at = off + change.text.length;
+  } else if (change.type === "backspace") {
+    const n = charBefore(body, off);
+    next = body.slice(0, off - n) + body.slice(off);
+    at = off - n;
+  } else if (change.type === "delete") {
+    next = body.slice(0, off) + body.slice(off + charAfter(body, off));
+  } else if (change.type === "move") {
+    // Off its start: just before it in the essay. Off its end: back in the essay, right after it.
+    if (change.by < 0 && off === 0) {
+      setEditing(view, null);
+      const prev = step(view.state, view.state.selection.from, -1);
+      if (prev !== null) moveCaret(view, prev);
+      return;
+    }
+    if (change.by > 0 && off >= body.length) return setEditing(view, null);
+    at = change.by < 0 ? off - charBefore(body, off) : off + charAfter(body, off);
+  } else {
+    at = change.at === "start" ? 0 : body.length;
+  }
+  if (next !== body) {
+    if (!next) {
+      if (s.kind === "insert") opts.store.remove(s.id);
+      else opts.store.put({ ...s, kind: "delete", body: "" });
+      return setEditing(view, null);
+    }
+    opts.store.put({ ...s, body: next });
+  }
+  setEditing(view, { id: s.id, offset: at });
+}
+
 // ─── commenting ─────────────────────────────────────────────────────────────
 
 /** A comment on the words from `from` to `to`, anchored like a suggestion, with nothing to say yet. */
@@ -592,11 +738,15 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
   return new Plugin({
     key: suggestKey,
     state: {
-      init: (): { tick: number; picked: string | null } => ({ tick: 0, picked: null }),
+      init: (): SuggestState => ({ tick: 0, picked: null, editing: null }),
       apply(tr, value) {
-        const meta = tr.getMeta(suggestKey) as { refresh?: boolean; pick?: string | null } | undefined;
+        const meta = tr.getMeta(suggestKey) as { refresh?: boolean; pick?: string | null; editing?: EditingOwn | null } | undefined;
         if (!meta) return value;
-        return { tick: value.tick + 1, picked: meta.pick !== undefined ? meta.pick : value.picked };
+        return {
+          tick: value.tick + 1,
+          picked: meta.pick !== undefined ? meta.pick : value.picked,
+          editing: meta.editing !== undefined ? meta.editing : value.editing,
+        };
       },
     },
     view(view) {
@@ -615,13 +765,45 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
       editable: () => opts.mode !== "view",
       handleTextInput(view, from, to, text) {
         if (!suggesting) return opts.mode === "view";
-        suggestText(view, opts, from, to, text);
+        if (editingOf(view.state)) editOwn(view, opts, { type: "text", text });
+        else suggestText(view, opts, from, to, text);
         return true;
       },
       handleKeyDown(view, event) {
         if (opts.mode === "owner") return false;
         const mod = event.metaKey || event.ctrlKey;
         if (!suggesting) return !isNavigation(event, mod);
+        // Changing my own suggested text: the keys act inside it.
+        if (editingOf(view.state)) {
+          const plain = !mod && !event.altKey;
+          let handled = true;
+          if (event.key === "Backspace" && plain) editOwn(view, opts, { type: "backspace" });
+          else if (event.key === "Delete" && plain) editOwn(view, opts, { type: "delete" });
+          else if (event.key === "Enter" && plain) editOwn(view, opts, { type: "text", text: "\n" });
+          else if (event.key === "ArrowLeft" && plain && !event.shiftKey) editOwn(view, opts, { type: "move", by: -1 });
+          else if (event.key === "ArrowRight" && plain && !event.shiftKey) editOwn(view, opts, { type: "move", by: 1 });
+          else if (event.key === "Home" && plain && !event.shiftKey) editOwn(view, opts, { type: "to", at: "start" });
+          else if (event.key === "End" && plain && !event.shiftKey) editOwn(view, opts, { type: "to", at: "end" });
+          else if (event.key === "Escape") setEditing(view, null);
+          else if (["Shift", "Control", "Meta", "Alt"].includes(event.key)) return false;
+          else {
+            // Anything else (another way of moving, undo, a shortcut): back in the essay, then as usual.
+            setEditing(view, null);
+            handled = false;
+          }
+          if (handled) {
+            event.preventDefault();
+            return true;
+          }
+        }
+        // Just after my own suggested text, ← steps back into it.
+        if (event.key === "ArrowLeft" && !mod && !event.altKey && !event.shiftKey && view.state.selection.empty) {
+          const own = myInsertAt(view.state, opts, view.state.selection.from);
+          if (own?.body && startEditing(view, opts, own.id, own.body.length - charBefore(own.body, own.body.length))) {
+            event.preventDefault();
+            return true;
+          }
+        }
         syncSelection(view);
         if (mod && event.key.toLowerCase() === "z") {
           event.preventDefault();
@@ -660,15 +842,44 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
           e.preventDefault();
           if (!suggesting) return true;
           const text = e.data ?? e.dataTransfer?.getData("text/plain") ?? "";
+          if (text && editingOf(view.state)) return editOwn(view, opts, { type: "text", text }), true;
           const { from, to } = liveSelection(view);
           if (text) suggestText(view, opts, from, to, text);
           return true;
+        },
+        // Clicking into my own suggested text puts the caret there; clicking anywhere else, or
+        // leaving the essay, goes back to it.
+        mousedown(view, event) {
+          if (!suggesting) return false;
+          const el = (event.target as HTMLElement | null)?.closest?.(".sugg-ins[data-sugg]") as HTMLElement | null;
+          const s = el?.dataset.sugg ? opts.store.get(el.dataset.sugg) : undefined;
+          if (!el || !s || s.author_id !== opts.me.id) {
+            if (editingOf(view.state)) setEditing(view, null);
+            return false;
+          }
+          event.preventDefault();
+          const doc = el.ownerDocument as Document & {
+            caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+          };
+          let offset = (s.body ?? "").length;
+          const pos = doc.caretPositionFromPoint?.(event.clientX, event.clientY);
+          const range = pos ? null : doc.caretRangeFromPoint?.(event.clientX, event.clientY);
+          const node = pos?.offsetNode ?? range?.startContainer;
+          if (node && el.contains(node)) offset = offsetInWidget(el, node, pos?.offset ?? range?.startOffset ?? 0);
+          if (!view.hasFocus()) view.focus();
+          startEditing(view, opts, s.id, offset);
+          return true;
+        },
+        blur(view) {
+          if (editingOf(view.state)) setEditing(view, null);
+          return false;
         },
       },
       handlePaste(view, _event, slice) {
         if (opts.mode === "owner") return false;
         if (!suggesting) return true;
         const text = slice.content.textBetween(0, slice.content.size, "\n");
+        if (text && editingOf(view.state)) return editOwn(view, opts, { type: "text", text }), true;
         const { from, to } = view.state.selection;
         if (text) suggestText(view, opts, from, to, text);
         return true;

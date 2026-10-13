@@ -339,3 +339,17 @@ select option {
   background-color: var(--panel);
   color: var(--ink);
 }
+
+/* Changing your own suggested text in place: its caret, and the text it's in. */
+.essay .sugg-editing {
+  outline: 1px solid color-mix(in srgb, var(--add) 60%, transparent);
+}
+.essay .sugg-caret {
+  display: inline-block;
+  width: 0;
+  height: 1.15em;
+  margin: 0 -1px;
+  border-left: 2px solid var(--add);
+  vertical-align: text-bottom;
+  animation: typing-blink 1s steps(1) infinite;
+}
