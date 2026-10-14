@@ -40,3 +40,34 @@ test("opening a piece far down the Files list keeps the list where it was", asyn
   await expect(page.getByRole("tree", { name: "Colleges and pieces" }).getByRole("treeitem", { name: /^Why College 15/ })).toBeInViewport();
   await expect.poll(() => page.locator("#side-panel > div").last().evaluate((el) => el.scrollTop)).toBeGreaterThan(100);
 });
+
+test("opening an essay from the far end of its college's tabs keeps the tabs where they were", async ({ page }) => {
+  await signUp(page, "tabscroll");
+  await page.goto("/desk/settings/connectors");
+  await page.getByLabel("Assistant").selectOption("Claude");
+  await page.getByRole("button", { name: "Make a connector link" }).click();
+  const link = await page.getByRole("textbox", { name: "Connector link" }).inputValue();
+  const client = new Client({ name: "e2e", version: "1.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(link)));
+  // One college with twelve essays: more tabs than fit across.
+  const pieces = Array.from({ length: 12 }, (_, i) => ({ title: `Short answer number ${i + 1}`, prompt: "Tell us more.", limit_value: 150 }));
+  const made = (await client.callTool({ name: "set_up_colleges", arguments: { colleges: [{ name: "Testy University", round: "EA", pieces }] } })) as {
+    isError?: boolean;
+  };
+  expect(made.isError).toBeFalsy();
+  await client.close();
+
+  await page.goto("/desk/write");
+  await page.getByRole("tree", { name: "Colleges and pieces" }).getByRole("treeitem", { name: /^Testy University/ }).locator("> div").first().click();
+  await page.waitForURL(/\/desk\/piece\//);
+  const tabs = page.getByRole("tablist", { name: "Pieces" });
+  await expect(tabs.getByRole("tab")).toHaveCount(12);
+  await tabs.evaluate((el) => (el.scrollLeft = el.scrollWidth));
+  await expect.poll(() => tabs.evaluate((el) => el.scrollLeft)).toBeGreaterThan(100);
+
+  const lastTab = tabs.getByRole("tab", { name: /Short answer number 12/ });
+  await lastTab.click();
+  await expect(page.getByRole("tablist", { name: "Pieces" }).getByRole("tab", { name: /Short answer number 12/ })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tablist", { name: "Pieces" }).getByRole("tab", { name: /Short answer number 12/ })).toBeInViewport();
+  await expect.poll(() => page.getByRole("tablist", { name: "Pieces" }).evaluate((el) => el.scrollLeft)).toBeGreaterThan(100);
+});

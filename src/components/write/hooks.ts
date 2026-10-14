@@ -6,7 +6,7 @@
  * choice still works for this visit, it just isn't remembered.
  */
 
-import { useSyncExternalStore } from "react";
+import { useLayoutEffect, useSyncExternalStore, type RefObject } from "react";
 
 const memory = new Map<string, string | null>();
 const listeners = new Set<() => void>();
@@ -106,4 +106,55 @@ export function isTyping(e: KeyboardEvent): boolean {
   const t = e.target as HTMLElement | null;
   if (!t) return false;
   return t.isContentEditable || t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT";
+}
+
+/**
+ * Keep a scrolling box where it was across pages. Opening another piece loads a new page, which
+ * builds the box again at its start: it goes back to where it was (for this tab, under `key`), and
+ * if the item marked `current` would still be out of view, scrolls just enough to show it.
+ */
+export function useKeptScroll(box: RefObject<HTMLElement | null>, key: string, axis: "y" | "x", current: string) {
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const prop = axis === "y" ? "scrollTop" : "scrollLeft";
+    let saved = 0;
+    try {
+      saved = Number(sessionStorage.getItem(key)) || 0;
+    } catch {
+      // Storage blocked: start at the start.
+    }
+    // What's inside can still be growing for a frame or two: keep at it until it fits.
+    let frames = 0;
+    let raf = 0;
+    const settle = () => {
+      if (saved) el[prop] = saved;
+      if (saved && Math.abs(el[prop] - saved) > 1 && frames++ < 20) {
+        raf = requestAnimationFrame(settle);
+        return;
+      }
+      const here = el.querySelector<HTMLElement>(current);
+      if (!here) return;
+      const a = here.getBoundingClientRect();
+      const b = el.getBoundingClientRect();
+      const out = axis === "y" ? a.top < b.top || a.bottom > b.bottom : a.left < b.left || a.right > b.right;
+      if (out) {
+        if (axis === "y") el.scrollTop += a.top < b.top ? a.top - b.top : a.bottom - b.bottom;
+        else el.scrollLeft += a.left < b.left ? a.left - b.left : a.right - b.right;
+      }
+    };
+    settle();
+    const save = () => {
+      try {
+        sessionStorage.setItem(key, String(Math.round(el[prop])));
+      } catch {
+        // Not remembered, then.
+      }
+    };
+    el.addEventListener("scroll", save, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("scroll", save);
+    };
+  }, [box, key, axis, current]);
 }

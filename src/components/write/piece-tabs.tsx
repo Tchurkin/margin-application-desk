@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { addPiece } from "@/app/desk/actions";
 import { countLabel, tabLabel, type RailPiece } from "@/lib/write/rail";
+import { useKeptScroll } from "./hooks";
 import { CloseIcon, PlusIcon } from "./icons";
 
 /** The drag type a piece tab carries, for "open beside". */
@@ -35,9 +36,12 @@ export function PieceTabs({
   owner: boolean;
   onDelete: (piece: RailPiece) => void;
 }) {
+  // Opening another of this college's pieces loads a new page: the tabs keep their place.
+  const strip = useRef<HTMLDivElement>(null);
+  useKeptScroll(strip, `desk:tabs-scroll:${collegeId ?? "independent"}`, "x", "[aria-selected='true']");
   return (
     <div className="flex items-end gap-1 border-b border-line">
-      <div role="tablist" aria-label="Pieces" className="-mb-px flex min-w-0 overflow-x-auto">
+      <div ref={strip} role="tablist" aria-label="Pieces" className="-mb-px flex min-w-0 overflow-x-auto">
         {pieces.map((p) => {
           const selected = p.id === currentId;
           const count = selected ? currentCount : countLabel({ words: p.word_count, kind: p.limit_kind, limit: p.limit_value });
