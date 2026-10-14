@@ -195,7 +195,7 @@ export function Workspace({
               </button>
             )}
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">{renderPanel(tool)}</div>
+          <PanelScroll tool={tool}>{renderPanel(tool)}</PanelScroll>
         </aside>
       )}
       {shown && !narrow && (
@@ -235,6 +235,60 @@ export function Workspace({
       <div className="min-w-0 lg:min-h-0 lg:overflow-y-auto lg:overscroll-contain" data-write-scroll>
         {children}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The side panel's scrolling body. Opening another piece loads a new page, which builds the panel
+ * again from the top: it goes back to where it was scrolled (for each tool), and if the piece just
+ * opened would still be out of view, just far enough to show it.
+ */
+function PanelScroll({ tool, children }: { tool: Tool; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  const key = `desk:panel-scroll:${tool}`;
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    let saved = 0;
+    try {
+      saved = Number(sessionStorage.getItem(key)) || 0;
+    } catch {
+      // Storage blocked: start at the top.
+    }
+    // The list can still be growing for a frame or two: keep at it until it's tall enough.
+    let frames = 0;
+    let raf = 0;
+    const settle = () => {
+      if (saved) el.scrollTop = saved;
+      if (saved && Math.abs(el.scrollTop - saved) > 1 && frames++ < 20) {
+        raf = requestAnimationFrame(settle);
+        return;
+      }
+      const here = el.querySelector<HTMLElement>("[aria-current='page']");
+      if (here) {
+        const a = here.getBoundingClientRect();
+        const b = el.getBoundingClientRect();
+        if (a.top < b.top || a.bottom > b.bottom) here.scrollIntoView({ block: "nearest" });
+      }
+    };
+    settle();
+    const save = () => {
+      try {
+        sessionStorage.setItem(key, String(Math.round(el.scrollTop)));
+      } catch {
+        // Not remembered, then.
+      }
+    };
+    el.addEventListener("scroll", save, { passive: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      el.removeEventListener("scroll", save);
+    };
+  }, [key]);
+  return (
+    <div ref={box} className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+      {children}
     </div>
   );
 }
