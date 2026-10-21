@@ -140,13 +140,11 @@ export function CollegeRail({
       if (g.college && collegeHref) router.push(collegeHref(g.college.id));
       return;
     }
-    // Already on it: the click folds or unfolds instead.
-    if (target.id === currentId) setOpen(g.key, !isOpen(g));
-    else {
-      // Unfold at once; the piece follows as soon as it has loaded.
-      if (!isOpen(g)) setOpen(g.key, true);
-      router.push(pieceHref(target.id));
-    }
+    // Open, a click anywhere on it folds it away again (as a click anywhere opened it).
+    if (isOpen(g)) return setOpen(g.key, false);
+    // Unfold at once; its piece follows as soon as it has loaded (unless it's the one open now).
+    setOpen(g.key, true);
+    if (target.id !== currentId) router.push(pieceHref(target.id));
   };
 
   /** Start loading a piece the pointer is over, so clicking it opens it sooner. */
@@ -303,7 +301,7 @@ export function CollegeRail({
               }`}
               onClick={() => openGroup(g)}
               onMouseEnter={() => warm(pickCollegePiece(g.pieces)?.id)}
-              title={g.total ? "Open the first piece still being worked on" : undefined}
+              title={g.total ? (open ? "Fold this college's pieces away" : "Open the first piece still being worked on") : undefined}
             >
               <span
                 aria-hidden

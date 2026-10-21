@@ -57,8 +57,8 @@ test("opening an essay from the far end of its college's tabs keeps the tabs whe
   expect(made.isError).toBeFalsy();
   await client.close();
 
+  // Write opens the college's first essay.
   await page.goto("/desk/write");
-  await page.getByRole("tree", { name: "Colleges and pieces" }).getByRole("treeitem", { name: /^Testy University/ }).locator("> div").first().click();
   await page.waitForURL(/\/desk\/piece\//);
   const tabs = page.getByRole("tablist", { name: "Pieces" });
   await expect(tabs.getByRole("tab")).toHaveCount(12);
@@ -70,4 +70,34 @@ test("opening an essay from the far end of its college's tabs keeps the tabs whe
   await expect(page.getByRole("tablist", { name: "Pieces" }).getByRole("tab", { name: /Short answer number 12/ })).toHaveAttribute("aria-selected", "true");
   await expect(page.getByRole("tablist", { name: "Pieces" }).getByRole("tab", { name: /Short answer number 12/ })).toBeInViewport();
   await expect.poll(() => page.getByRole("tablist", { name: "Pieces" }).evaluate((el) => el.scrollLeft)).toBeGreaterThan(100);
+});
+
+test("a college in the Files list folds by a click anywhere on it, as it opens", async ({ page }) => {
+  await signUp(page, "railfold");
+  await page.goto("/desk/settings/connectors");
+  await page.getByLabel("Assistant").selectOption("Claude");
+  await page.getByRole("button", { name: "Make a connector link" }).click();
+  const link = await page.getByRole("textbox", { name: "Connector link" }).inputValue();
+  const client = new Client({ name: "e2e", version: "1.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(link)));
+  const colleges = ["Testy College A", "Testy College B"].map((name) => ({ name, round: "RD", pieces: [{ title: `Why ${name}`, prompt: "Why us?", limit_value: 250 }] }));
+  expect(((await client.callTool({ name: "set_up_colleges", arguments: { colleges } })) as { isError?: boolean }).isError).toBeFalsy();
+  await client.close();
+
+  await page.goto("/desk/write");
+  await page.waitForURL(/\/desk\/piece\//);
+  const rail = page.getByRole("tree", { name: "Colleges and pieces" });
+  const b = rail.getByRole("treeitem", { name: /^Testy College B/ });
+  // Closed: a click on its name opens it, and its essay.
+  await expect(b).toHaveAttribute("aria-expanded", "false");
+  await b.getByText("Testy College B", { exact: true }).click();
+  await expect(b).toHaveAttribute("aria-expanded", "true");
+  await expect(rail.getByRole("treeitem", { name: /^Why Testy College B/ })).toHaveAttribute("aria-current", "page");
+  // Open: a click on its name (not just the caret) folds it.
+  await b.getByText("Testy College B", { exact: true }).click();
+  await expect(b).toHaveAttribute("aria-expanded", "false");
+  await expect(rail.getByRole("treeitem", { name: /^Why Testy College B/ })).toHaveCount(0);
+  // And opens again.
+  await b.getByText("Testy College B", { exact: true }).click();
+  await expect(b).toHaveAttribute("aria-expanded", "true");
 });
