@@ -21,7 +21,7 @@ import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";
 import { HeldSelection, heldRange, heldSelectionKey } from "@/lib/editor/held-selection";
 import { Rewrites } from "@/lib/editor/rewrites";
-import { acceptInto, commentOn, DIRECT_EDIT, resolveSuggestion, suggestKey, suggestPlugin, type SuggestMode } from "@/lib/suggest/plugin";
+import { acceptInto, commentOn, DIRECT_EDIT, liveSelection, resolveSuggestion, suggestKey, suggestPlugin, type SuggestMode } from "@/lib/suggest/plugin";
 import { SuggestionStore, type Suggestion } from "@/lib/suggest/store";
 import { SupabaseSuggestionBackend } from "@/lib/suggest/supabase-backend";
 import { supabaseBrowser } from "@/lib/supabase/client";
@@ -374,7 +374,8 @@ export function PieceEditor({
   const [draft, setDraft] = useState<Suggestion | null>(null);
   const startComment = useCallback(() => {
     if (!editor || !canComment) return;
-    const { from, to } = editor.state.selection;
+    // The highlight as the browser shows it: the editor's copy can be a keystroke behind.
+    const { from, to } = editor.view.hasFocus() ? liveSelection(editor.view) : editor.state.selection;
     const range = to > from ? { from, to } : heldRange(editor.state);
     const c = range && commentOn(editor.state, range.from, range.to, me, piece.id);
     if (!c) return;

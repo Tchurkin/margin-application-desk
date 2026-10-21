@@ -452,7 +452,7 @@ function moveCaret(view: EditorView, pos: number) {
  * "selectionchange" events, which can arrive after the next keystroke; suggest mode never lets
  * the browser change the text, so it must not act on a stale caret.
  */
-function liveSelection(view: EditorView): { from: number; to: number } {
+export function liveSelection(view: EditorView): { from: number; to: number } {
   const fallback = { from: view.state.selection.from, to: view.state.selection.to };
   const root = view.root as Document | ShadowRoot;
   const sel = "getSelection" in root && root.getSelection ? root.getSelection() : null;

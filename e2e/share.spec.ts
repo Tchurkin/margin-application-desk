@@ -550,7 +550,8 @@ test("the board shows the suggestions and comments waiting on each supplemental,
   await expect(mom.getByTestId("comment")).toHaveCount(1);
 
   await page.goto("/desk");
-  const card = page.getByRole("link", { name: /^Shared essay/ });
+  // On the student's own board a card can be dragged between columns: a slider.
+  const card = page.getByRole("slider", { name: /^Shared essay/ });
   await expect(card.getByTestId("rail-suggestions")).toHaveText("1");
   await expect(card.getByTestId("rail-comments")).toHaveText("1");
   await expect(card).toHaveAccessibleName(/1 suggestion, 1 comment waiting/);
