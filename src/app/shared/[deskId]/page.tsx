@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { MasterBoard } from "@/components/board/master-board";
 import { todayISO } from "@/lib/data/queries";
+import { loadWaiting } from "@/lib/data/waiting";
 import { loadProgress } from "@/lib/progress/load";
 import { requireDeskAccess } from "@/lib/supabase/server";
 
@@ -9,6 +10,7 @@ export default async function SharedBoard(props: PageProps<"/shared/[deskId]">) 
   const { supabase, role } = await requireDeskAccess(deskId);
   if (role === "owner") redirect("/desk");
   const board = await loadProgress(supabase, deskId);
+  const waiting = await loadWaiting(supabase, board.pieces.map((p) => p.id));
 
   return (
     <main className="mx-auto w-full max-w-6xl px-4 py-8">
@@ -22,6 +24,7 @@ export default async function SharedBoard(props: PageProps<"/shared/[deskId]">) 
           letters: board.letters,
           lettersReady: board.lettersReady,
         }}
+        waiting={waiting}
         serverToday={todayISO()}
         base={`/shared/${deskId}`}
         canWrite={false}

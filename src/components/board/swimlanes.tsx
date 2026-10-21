@@ -7,6 +7,8 @@ import { StageSlider } from "@/components/progress/stage-slider";
 import { BAR_TONE, CARD_EDGE } from "@/components/progress/tones";
 import { ConfirmDialog } from "@/components/write/confirm-dialog";
 import { ChevronIcon } from "@/components/write/icons";
+import { WaitingBadges } from "@/components/waiting-badges";
+import { NO_WAITING, waitingLabel, type Waiting } from "@/lib/data/waiting";
 import { APP_SYSTEMS, labelOf, ROUNDS, type PieceStatus } from "@/lib/domain/colleges";
 import {
   countLabel,
@@ -43,6 +45,8 @@ export interface LaneContext {
   /** Mark a college's application submitted, or take that back. */
   onSubmit: (college: ProgressCollege, submitted: boolean) => Promise<void>;
   letters: LetterActions;
+  /** Suggestions and comments waiting on each piece. */
+  waiting: Record<string, Waiting>;
 }
 
 const ROUND_SHORT: Record<string, string> = { rolling: "Rolling", priority: "Priority" };
@@ -284,12 +288,13 @@ function Card({
 }) {
   // A college's pieces show their own date when it differs from the deadline (an independent piece's is on its lane).
   const own = lane.college && piece.due && piece.due !== lane.college.deadline ? piece.due : null;
+  const w = ctx.waiting[piece.id] ?? NO_WAITING;
   return (
     <StageSlider
       stage={piece.status}
       href={`${ctx.base}/piece/${piece.id}`}
-      name={piece.title}
-      tooltip={`${piece.title}: ${countPhrase(piece)}${ctx.canWrite && !lane.submitted ? " · drag to another column" : ""}`}
+      name={`${piece.title}${waitingLabel(w)}`}
+      tooltip={`${piece.title}: ${countPhrase(piece)}${waitingLabel(w)}${ctx.canWrite && !lane.submitted ? " · drag to another column" : ""}`}
       movable={ctx.canWrite && !lane.submitted}
       track={track}
       focusToken={`c:${piece.id}`}
@@ -302,6 +307,7 @@ function Card({
       <span className="line-clamp-2 leading-snug">{piece.title}</span>
       <span className="mt-1 flex flex-wrap items-center justify-between gap-x-2 text-xs">
         <span className="text-muted tabular-nums">{countLabel(piece)}</span>
+        <WaitingBadges w={w} />
         {own && <DueTag date={own} today={ctx.today} />}
       </span>
     </StageSlider>

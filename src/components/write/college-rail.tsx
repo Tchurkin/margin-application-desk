@@ -6,7 +6,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { labelOf, PIECE_STATUSES, type PieceStatus } from "@/lib/domain/colleges";
 import { PREF } from "@/lib/write/layout";
 import { countLabel, groupMeta, pickCollegePiece, SHARED, type RailGroup, type RailPiece } from "@/lib/write/rail";
-import type { Waiting } from "@/lib/data/queries";
+import { WaitingBadges } from "@/components/waiting-badges";
+import { NO_WAITING as NONE, waitingLabel, type Waiting } from "@/lib/data/waiting";
 import { usePref, writePref } from "./hooks";
 import { ChevronIcon, FilesIcon } from "./icons";
 
@@ -342,49 +343,5 @@ export function CollegeRail({
         );
       })}
     </ul>
-  );
-}
-
-const NONE: Waiting = { suggestions: 0, comments: 0 };
-
-/** ", 2 suggestions, 1 comment" for a screen reader, or nothing. */
-function waitingLabel(w: Waiting): string {
-  const parts = [
-    w.suggestions ? `${w.suggestions} suggestion${w.suggestions === 1 ? "" : "s"}` : "",
-    w.comments ? `${w.comments} comment${w.comments === 1 ? "" : "s"}` : "",
-  ].filter(Boolean);
-  return parts.length ? `, ${parts.join(", ")} waiting` : "";
-}
-
-/** Small counts beside a piece (or a folded college): suggestions in green, comments in amber. */
-function WaitingBadges({ w }: { w: Waiting }) {
-  if (!w.suggestions && !w.comments) return null;
-  return (
-    <span aria-hidden className="flex shrink-0 items-center gap-1" data-testid="rail-waiting">
-      {w.suggestions > 0 && (
-        <span
-          className="inline-flex items-center gap-0.5 rounded-full bg-add-soft px-1.5 text-[11px] leading-4 font-semibold text-add"
-          title={`${w.suggestions} suggestion${w.suggestions === 1 ? "" : "s"} waiting`}
-          data-testid="rail-suggestions"
-        >
-          <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 13l1-3.5L10.5 3l2.5 2.5L6.5 12z" />
-          </svg>
-          {w.suggestions}
-        </span>
-      )}
-      {w.comments > 0 && (
-        <span
-          className="inline-flex items-center gap-0.5 rounded-full bg-warn-soft px-1.5 text-[11px] leading-4 font-semibold text-warn"
-          title={`${w.comments} comment${w.comments === 1 ? "" : "s"} waiting`}
-          data-testid="rail-comments"
-        >
-          <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
-            <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />
-          </svg>
-          {w.comments}
-        </span>
-      )}
-    </span>
   );
 }

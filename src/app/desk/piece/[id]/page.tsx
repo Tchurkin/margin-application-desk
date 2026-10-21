@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadDesk, loadWaiting, todayISO } from "@/lib/data/queries";
+import { loadDesk, todayISO } from "@/lib/data/queries";
+import { loadWaiting } from "@/lib/data/waiting";
 import { requireDesk } from "@/lib/supabase/server";
 import { railOrder, SHARED } from "@/lib/write/rail";
 import { PieceEditor, type PieceMeta } from "./piece-editor";

@@ -9,6 +9,8 @@ import { applyPieceChange, buildLanes, withPending, type PieceChange, type Progr
 import { loadProgress, type ProgressData } from "@/lib/progress/load";
 import { stageIndex, stageLabel } from "@/lib/progress/stages";
 import { supabaseBrowser } from "@/lib/supabase/client";
+import { useLiveWaiting } from "@/components/waiting-badges";
+import type { Waiting } from "@/lib/data/waiting";
 import { RecommendersBar, type LetterActions } from "./letters";
 import { Swimlanes, type BoardMove, type LaneContext } from "./swimlanes";
 
@@ -44,9 +46,12 @@ export function MasterBoard({
   canWrite,
   collegeLinks,
   behind,
+  waiting: initialWaiting,
 }: {
   deskId: string;
   initial: BoardData;
+  /** Suggestions and comments waiting on each piece, as the page loaded. */
+  waiting?: Record<string, Waiting>;
   /** The server's date, used until the browser's own calendar day takes over. */
   serverToday: string;
   /** "/desk" for the owner, "/shared/<id>" for people it's shared with. */
@@ -57,6 +62,8 @@ export function MasterBoard({
   behind?: boolean;
 }) {
   const [data, setData] = useState<BoardData>(initial);
+  const pieceIds = useMemo(() => data.pieces.map((p) => p.id), [data.pieces]);
+  const waiting = useLiveWaiting(initialWaiting, pieceIds, deskId);
   // Moves still being saved, shown ahead of the database.
   const [pending, setPending] = useState<ReadonlyMap<string, PieceStatus>>(() => new Map());
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -339,7 +346,7 @@ export function MasterBoard({
 
   const pieces = useMemo(() => withPending(data.pieces, pending), [data.pieces, pending]);
   const lanes = useMemo(() => buildLanes(data.colleges, pieces, today), [data.colleges, pieces, today]);
-  const ctx: LaneContext = { today, base, canWrite, collegeLinks, onMove: move, onSubmit: submit, letters: letterActions };
+  const ctx: LaneContext = { today, base, canWrite, collegeLinks, onMove: move, onSubmit: submit, letters: letterActions, waiting };
   // Submitted colleges fold on their own; Fold all is for the rest.
   const keys = lanes.filter((l) => !l.submitted).map((l) => l.key);
   const anyFolded = keys.some((k) => folded.has(k));

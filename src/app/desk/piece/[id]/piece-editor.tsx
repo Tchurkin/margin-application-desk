@@ -15,7 +15,7 @@ import { useMedia, usePref, writePref } from "@/components/write/hooks";
 import { VersionCompare, type LoadedVersion } from "@/components/write/version-compare";
 import { PREF } from "@/lib/write/layout";
 import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
-import type { Waiting } from "@/lib/data/queries";
+import type { Waiting } from "@/lib/data/waiting";
 import { WriteWorkspace } from "./write-workspace";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";

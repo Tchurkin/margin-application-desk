@@ -13,7 +13,8 @@ import type { PieceStatus } from "@/lib/domain/colleges";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { byPiece, deskPresence, type Here } from "@/lib/sync/desk-presence";
 import type { RailGroup, RailPiece } from "@/lib/write/rail";
-import type { Waiting } from "@/lib/data/queries";
+import type { Waiting } from "@/lib/data/waiting";
+import { useLiveWaiting } from "@/components/waiting-badges";
 import { deletePiece } from "../../actions";
 
 const FILES: ToolDef = { id: "files", label: "Files", hint: "Colleges and pieces", icon: <FilesIcon /> };
@@ -72,6 +73,9 @@ export function WriteWorkspace({
   const [others, setOthers] = useState<Here[]>([]);
   useEffect(() => (deskId ? deskPresence(supabase, deskId).attach(here, setOthers) : undefined), [supabase, deskId, here]);
   const people = useMemo(() => byPiece(others), [others]);
+  // What waits on every piece, kept current as suggestions and comments come and go.
+  const pieceIds = useMemo(() => workspace.groups.flatMap((g) => g.pieces.map((p) => p.id)), [workspace.groups]);
+  const waiting = useLiveWaiting(workspace.waiting, pieceIds, deskId);
   const pieceHref = (id: string) => `${workspace.base}/piece/${id}`;
   // A college with no pieces yet opens its page, which only the student has.
   const collegeHref = owner ? (id: string) => `/desk/college/${id}` : undefined;
@@ -88,7 +92,7 @@ export function WriteWorkspace({
             pieceHref={pieceHref}
             collegeHref={collegeHref}
             live={{ count: countNow, status, waiting: waitingNow }}
-            waiting={workspace.waiting}
+            waiting={waiting}
             people={people}
           />
         ) : t === "ask" && !owner ? (

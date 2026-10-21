@@ -65,39 +65,3 @@ export function dueOf(piece: PieceRow, college: CollegeRow | undefined): string 
 export function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
-
-/** Open suggestions and comments on one piece. */
-export interface Waiting {
-  suggestions: number;
-  comments: number;
-}
-
-/**
- * How many suggestions and comments are waiting on each piece, by piece id (pieces with none
- * are left out). Nothing (an empty record) if they can't be read.
- */
-export async function loadWaiting(supabase: SupabaseClient, pieceIds: string[]): Promise<Record<string, Waiting>> {
-  const out: Record<string, Waiting> = {};
-  if (!pieceIds.length) return out;
-  const PAGE = 1000;
-  try {
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await supabase
-        .from("suggestions")
-        .select("piece_id, kind")
-        .in("piece_id", pieceIds)
-        .eq("status", "open")
-        .order("id")
-        .range(from, from + PAGE - 1);
-      if (error) return out;
-      for (const r of (data ?? []) as { piece_id: string; kind: string }[]) {
-        const w = (out[r.piece_id] ??= { suggestions: 0, comments: 0 });
-        if (r.kind === "comment") w.comments++;
-        else w.suggestions++;
-      }
-      if (!data || data.length < PAGE) return out;
-    }
-  } catch {
-    return out;
-  }
-}

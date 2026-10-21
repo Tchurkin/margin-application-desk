@@ -5,6 +5,7 @@ import { boardStats } from "@/components/board/summary";
 import { loadDesk, todayISO } from "@/lib/data/queries";
 import { checkCommonApp, COMMON_APP_MAX } from "@/lib/domain/colleges";
 import { loadProgress } from "@/lib/progress/load";
+import { loadWaiting } from "@/lib/data/waiting";
 import { requireDesk } from "@/lib/supabase/server";
 
 export default async function BoardPage() {
@@ -15,6 +16,7 @@ export default async function BoardPage() {
     supabase.from("profiles").select("display_name").eq("id", userId).single(),
   ]);
   const today = todayISO();
+  const waiting = await loadWaiting(supabase, board.pieces.map((p) => p.id));
   const ca = checkCommonApp(colleges);
 
   return (
@@ -61,6 +63,7 @@ export default async function BoardPage() {
           letters: board.letters,
           lettersReady: board.lettersReady,
         }}
+        waiting={waiting}
         serverToday={today}
         base="/desk"
         canWrite

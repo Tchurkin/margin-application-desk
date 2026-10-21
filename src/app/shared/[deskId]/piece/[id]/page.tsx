@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PieceEditor, type PieceMeta } from "@/app/desk/piece/[id]/piece-editor";
-import { loadDesk, loadWaiting, todayISO } from "@/lib/data/queries";
+import { loadDesk, todayISO } from "@/lib/data/queries";
+import { loadWaiting } from "@/lib/data/waiting";
 import { requireDeskAccess } from "@/lib/supabase/server";
 import { railOrder, SHARED } from "@/lib/write/rail";
 

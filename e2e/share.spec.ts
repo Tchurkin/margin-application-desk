@@ -534,6 +534,33 @@ test("the Files list shows how many suggestions and comments wait on each essay"
   await expect(row().getByTestId("rail-waiting")).toHaveCount(0);
 });
 
+test("the board shows the suggestions and comments waiting on each supplemental, live", async ({ page, browser }) => {
+  await studentWith(page, "boardcounts", "The cat sat.");
+  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  await openShared(mom, "Shared essay");
+  await essay(mom).click();
+  await mom.keyboard.press("Control+End");
+  await mom.keyboard.type(" Quietly.");
+  await mom.keyboard.press("Control+Home");
+  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
+  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await mom.getByTestId("comment-button").click();
+  await mom.getByTestId("comment-draft").getByLabel("Your comment").fill("Which cat?");
+  await mom.getByTestId("comment-draft").getByRole("button", { name: "Comment" }).click();
+  await expect(mom.getByTestId("comment")).toHaveCount(1);
+
+  await page.goto("/desk");
+  const card = page.getByRole("link", { name: /^Shared essay/ });
+  await expect(card.getByTestId("rail-suggestions")).toHaveText("1");
+  await expect(card.getByTestId("rail-comments")).toHaveText("1");
+  await expect(card).toHaveAccessibleName(/1 suggestion, 1 comment waiting/);
+
+  // Another suggestion while the student looks at the board: the count follows.
+  await mom.keyboard.press("Control+Home");
+  await mom.keyboard.type("Once, ");
+  await expect(card.getByTestId("rail-suggestions")).toHaveText("2", { timeout: 15_000 });
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");
