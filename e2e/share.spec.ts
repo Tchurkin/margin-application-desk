@@ -64,6 +64,31 @@ async function studentWith(page: Page, tag: string, text: string) {
 
 const suggestions = (p: Page) => p.getByTestId("suggestion");
 
+/**
+ * Highlight `words` in someone's essay, exactly: the browser's selection, checked before going on.
+ * (Shift+arrows can lose a step to a sync update arriving as the essay opens.)
+ */
+async function selectWords(p: Page, words: string) {
+  await essay(p).click();
+  await essay(p).evaluate((el, w) => {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      const i = (n.textContent ?? "").indexOf(w);
+      if (i < 0) continue;
+      const r = document.createRange();
+      r.setStart(n, i);
+      r.setEnd(n, i + w.length);
+      const sel = getSelection()!;
+      sel.removeAllRanges();
+      sel.addRange(r);
+      return;
+    }
+    throw new Error(`No "${w}" in the essay`);
+  }, words);
+  await expect.poll(() => p.evaluate(() => getSelection()?.toString())).toBe(words);
+}
+
+
 test("a parent suggests, the student sees it live and accepts it", async ({ page, browser }) => {
   await studentWith(page, "sugg", "The cat sat.");
   const url = await makeLink(page, { role: "suggest", label: "Mom" });
@@ -516,9 +541,7 @@ test("the Files list shows how many suggestions and comments wait on each essay"
   await mom.keyboard.type(" Quietly.");
   // Live on the essay the student has open.
   await expect(row().getByTestId("rail-suggestions")).toHaveText("1");
-  await mom.keyboard.press("Control+Home");
-  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
-  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await selectWords(mom, "cat");
   await mom.getByTestId("comment-button").click();
   await mom.getByTestId("comment-draft").getByLabel("Your comment").fill("Which cat?");
   await mom.getByTestId("comment-draft").getByRole("button", { name: "Comment" }).click();
@@ -541,9 +564,7 @@ test("the board shows the suggestions and comments waiting on each supplemental,
   await essay(mom).click();
   await mom.keyboard.press("Control+End");
   await mom.keyboard.type(" Quietly.");
-  await mom.keyboard.press("Control+Home");
-  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
-  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await selectWords(mom, "cat");
   await mom.getByTestId("comment-button").click();
   await mom.getByTestId("comment-draft").getByLabel("Your comment").fill("Which cat?");
   await mom.getByTestId("comment-draft").getByRole("button", { name: "Comment" }).click();
@@ -557,8 +578,10 @@ test("the board shows the suggestions and comments waiting on each supplemental,
   await expect(card).toHaveAccessibleName(/1 suggestion, 1 comment waiting/);
 
   // Another suggestion while the student looks at the board: the count follows.
+  await essay(mom).click();
   await mom.keyboard.press("Control+Home");
   await mom.keyboard.type("Once, ");
+  await expect(suggestions(mom)).toHaveCount(2);
   await expect(card.getByTestId("rail-suggestions")).toHaveText("2", { timeout: 15_000 });
 });
 
@@ -569,9 +592,7 @@ test("a parent comments on highlighted words; the student sees it live, resolves
   await essay(mom).click();
 
   // Highlight "cat": the Comment button shows under it.
-  await mom.keyboard.press("Control+Home");
-  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
-  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await selectWords(mom, "cat");
   await mom.getByTestId("comment-button").click();
   const draft = mom.getByTestId("comment-draft");
   await expect(draft).toContainText("“cat”");
