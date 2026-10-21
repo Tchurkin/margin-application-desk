@@ -504,6 +504,36 @@ test("a parent's awkward suggestions across paragraphs all go in when the studen
   await expect.poll(paragraphs).toEqual(done);
 });
 
+test("the Files list shows how many suggestions and comments wait on each essay", async ({ page, browser }) => {
+  await studentWith(page, "railcounts", "The cat sat.");
+  const row = () => page.getByRole("tree", { name: "Colleges and pieces" }).getByRole("treeitem", { name: /^Shared essay/ });
+  await expect(row().getByTestId("rail-waiting")).toHaveCount(0);
+
+  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  await openShared(mom, "Shared essay");
+  await essay(mom).click();
+  await mom.keyboard.press("Control+End");
+  await mom.keyboard.type(" Quietly.");
+  // Live on the essay the student has open.
+  await expect(row().getByTestId("rail-suggestions")).toHaveText("1");
+  await mom.keyboard.press("Control+Home");
+  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
+  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await mom.getByTestId("comment-button").click();
+  await mom.getByTestId("comment-draft").getByLabel("Your comment").fill("Which cat?");
+  await mom.getByTestId("comment-draft").getByRole("button", { name: "Comment" }).click();
+  await expect(row().getByTestId("rail-comments")).toHaveText("1");
+  await expect(row()).toHaveAccessibleName(/1 suggestion, 1 comment waiting/);
+
+  // From the database too, after a reload; and gone once dealt with.
+  await page.reload();
+  await expect(row().getByTestId("rail-suggestions")).toHaveText("1");
+  await expect(row().getByTestId("rail-comments")).toHaveText("1");
+  await suggestions(page).first().getByRole("button", { name: "Accept" }).click();
+  await page.getByTestId("comment").getByRole("button", { name: "Resolve" }).click();
+  await expect(row().getByTestId("rail-waiting")).toHaveCount(0);
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");

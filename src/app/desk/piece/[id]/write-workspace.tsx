@@ -13,6 +13,7 @@ import type { PieceStatus } from "@/lib/domain/colleges";
 import { supabaseBrowser } from "@/lib/supabase/client";
 import { byPiece, deskPresence, type Here } from "@/lib/sync/desk-presence";
 import type { RailGroup, RailPiece } from "@/lib/write/rail";
+import type { Waiting } from "@/lib/data/queries";
 import { deletePiece } from "../../actions";
 
 const FILES: ToolDef = { id: "files", label: "Files", hint: "Colleges and pieces", icon: <FilesIcon /> };
@@ -36,13 +37,14 @@ export function WriteWorkspace({
   deskId,
   title,
   countNow,
+  waitingNow,
   status,
   editor,
   history,
   onDeleteCurrent,
   children,
 }: {
-  workspace: { groups: RailGroup[]; tabs: RailPiece[]; base: string };
+  workspace: { groups: RailGroup[]; tabs: RailPiece[]; base: string; waiting?: Record<string, Waiting> };
   owner: boolean;
   /** Someone the desk is shared with who may ask in the essay's Ask chat (they can suggest or edit). */
   canAsk: boolean;
@@ -52,6 +54,8 @@ export function WriteWorkspace({
   deskId: string;
   title: string;
   countNow: string;
+  /** The open piece's suggestions and comments as the editor has them right now. */
+  waitingNow: Waiting | null;
   status: PieceStatus;
   editor: Editor | null;
   history: ReactNode;
@@ -83,7 +87,8 @@ export function WriteWorkspace({
             currentId={pieceId}
             pieceHref={pieceHref}
             collegeHref={collegeHref}
-            live={{ count: countNow, status }}
+            live={{ count: countNow, status, waiting: waitingNow }}
+            waiting={workspace.waiting}
             people={people}
           />
         ) : t === "ask" && !owner ? (

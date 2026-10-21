@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { loadDesk, todayISO } from "@/lib/data/queries";
+import { loadDesk, loadWaiting, todayISO } from "@/lib/data/queries";
 import { requireDesk } from "@/lib/supabase/server";
 import { railOrder, SHARED } from "@/lib/write/rail";
 import { PieceEditor, type PieceMeta } from "./piece-editor";
@@ -23,6 +23,7 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
     loadDesk(supabase, desk.id),
   ]);
   const groups = railOrder(colleges, pieces, todayISO());
+  const waiting = await loadWaiting(supabase, pieces.map((p) => p.id));
   const tabs = groups.find((g) => g.key === (piece.college_id ?? SHARED))?.pieces ?? [];
 
   return (
@@ -39,7 +40,7 @@ export default async function PiecePage(props: PageProps<"/desk/piece/[id]">) {
         userId={userId}
         author={profile?.display_name || "Student"}
         collegeName={college?.name ?? null}
-        workspace={{ groups, tabs, base: "/desk" }}
+        workspace={{ groups, tabs, base: "/desk", waiting }}
       />
     </main>
   );

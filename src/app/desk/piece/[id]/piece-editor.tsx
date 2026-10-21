@@ -15,6 +15,7 @@ import { useMedia, usePref, writePref } from "@/components/write/hooks";
 import { VersionCompare, type LoadedVersion } from "@/components/write/version-compare";
 import { PREF } from "@/lib/write/layout";
 import { countLabel, type RailGroup, type RailPiece } from "@/lib/write/rail";
+import type { Waiting } from "@/lib/data/queries";
 import { WriteWorkspace } from "./write-workspace";
 import { PIECE_STATUSES, labelOf, type PieceStatus } from "@/lib/domain/colleges";
 import { countChars, countWords, limitState, type LimitKind } from "@/lib/domain/count";
@@ -147,7 +148,7 @@ export function PieceEditor({
 }: {
   deskId?: string;
   /** The Write workspace: the college rail and this college's pieces as tabs, linking under `base`. */
-  workspace?: { groups: RailGroup[]; tabs: RailPiece[]; base: string };
+  workspace?: { groups: RailGroup[]; tabs: RailPiece[]; base: string; waiting?: Record<string, Waiting> };
   piece: PieceMeta;
   userId: string;
   author: string;
@@ -365,6 +366,7 @@ export function PieceEditor({
   );
 
   const openCount = useOpenCount(live?.store ?? null);
+  const waitingNow = useWaitingNow(live?.store ?? null);
   const limit = limitState(text, limitKind, limitValue);
 
   // Comments: anyone who can suggest highlights words and comments on them in the margin.
@@ -665,6 +667,7 @@ export function PieceEditor({
       deskId={deskId ?? ""}
       title={title}
       countNow={countLabel({ words: countWords(text), chars: countChars(text), kind: limitKind, limit: limitValue })}
+      waitingNow={waitingNow}
       status={pieceStatus}
       editor={editor}
       history={
@@ -974,6 +977,26 @@ function useOpenCount(store: SuggestionStore | null): number {
     () => (store ? store.open().length : 0),
     () => 0,
   );
+}
+
+/** The open piece's suggestions and comments, as they come and go (null while it loads). */
+function useWaitingNow(store: SuggestionStore | null): Waiting | null {
+  const subscribe = useCallback((fn: () => void) => (store ? store.subscribe(fn) : () => {}), [store]);
+  const key = useSyncExternalStore(
+    subscribe,
+    () => {
+      if (!store) return "";
+      const open = store.open();
+      const comments = open.filter((s) => s.kind === "comment").length;
+      return `${open.length - comments}:${comments}`;
+    },
+    () => "",
+  );
+  return useMemo(() => {
+    if (!key) return null;
+    const [suggestions, comments] = key.split(":").map(Number);
+    return { suggestions, comments };
+  }, [key]);
 }
 
 /** The caret that folds the margin away (the writing takes its space) and brings it back, with how many suggestions wait there. */

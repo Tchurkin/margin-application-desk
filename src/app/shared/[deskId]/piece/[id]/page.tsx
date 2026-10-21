@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PieceEditor, type PieceMeta } from "@/app/desk/piece/[id]/piece-editor";
-import { loadDesk, todayISO } from "@/lib/data/queries";
+import { loadDesk, loadWaiting, todayISO } from "@/lib/data/queries";
 import { requireDeskAccess } from "@/lib/supabase/server";
 import { railOrder, SHARED } from "@/lib/write/rail";
 
@@ -24,6 +24,7 @@ export default async function SharedPiece(props: PageProps<"/shared/[deskId]/pie
     loadDesk(supabase, deskId),
   ]);
   const groups = railOrder(colleges, pieces, todayISO());
+  const waiting = await loadWaiting(supabase, pieces.map((p) => p.id));
   const tabs = groups.find((g) => g.key === (piece.college_id ?? SHARED))?.pieces ?? [];
 
   return (
@@ -41,7 +42,7 @@ export default async function SharedPiece(props: PageProps<"/shared/[deskId]/pie
         author={name || "Guest"}
         collegeName={college?.name ?? null}
         role={role}
-        workspace={{ groups, tabs, base: `/shared/${deskId}` }}
+        workspace={{ groups, tabs, base: `/shared/${deskId}`, waiting }}
       />
     </main>
   );

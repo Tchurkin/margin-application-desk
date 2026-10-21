@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { labelOf, PIECE_STATUSES, type PieceStatus } from "@/lib/domain/colleges";
 import { PREF } from "@/lib/write/layout";
 import { countLabel, groupMeta, pickCollegePiece, SHARED, type RailGroup, type RailPiece } from "@/lib/write/rail";
+import type { Waiting } from "@/lib/data/queries";
 import { usePref, writePref } from "./hooks";
 import { ChevronIcon, FilesIcon } from "./icons";
 
@@ -73,6 +74,7 @@ export function CollegeRail({
   collegeHref,
   live,
   people,
+  waiting,
 }: {
   groups: RailGroup[];
   currentId: string;
@@ -80,10 +82,14 @@ export function CollegeRail({
   /** Where a college with no pieces yet opens (owners only). */
   collegeHref?: (id: string) => string;
   /** The open piece's count and status as the editor has them right now. */
-  live: { count: string; status: PieceStatus };
+  live: { count: string; status: PieceStatus; waiting?: Waiting | null };
   /** Everyone else working on the desk, by the piece they have open. */
   people?: Map<string, Face[]>;
+  /** Suggestions and comments waiting on each piece, as the page loaded. */
+  waiting?: Record<string, Waiting>;
 }) {
+  // The open piece's come from the editor, live; the others' from when the page loaded.
+  const waitingOn = (id: string): Waiting => (id === currentId && live.waiting ? live.waiting : (waiting?.[id] ?? NONE));
   const router = useRouter();
   const stored = usePref(PREF.railOpen);
   const expanded = useMemo(() => {
@@ -226,12 +232,13 @@ export function CollegeRail({
     const isVersion = !!p.variant_of && g.pieces.some((o) => o.id === p.variant_of);
     const indent = level === 1 ? (isVersion ? "pl-8" : "pl-3") : isVersion ? "pl-10" : "pl-7";
     const on = people?.get(p.id) ?? [];
+    const w = waitingOn(p.id);
     return (
       <li
         key={p.id}
         role="treeitem"
         aria-level={level}
-        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}${on.length ? `, ${hereLabel(on)}` : ""}`}
+        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}${waitingLabel(w)}${on.length ? `, ${hereLabel(on)}` : ""}`}
         aria-current={here ? "page" : undefined}
         data-rail-key={p.id}
         tabIndex={focusable === p.id ? 0 : -1}
@@ -255,6 +262,7 @@ export function CollegeRail({
       >
         <StatusDot status={status} />
         <span className={`min-w-0 flex-1 truncate ${level === 1 ? "font-medium" : ""}`}>{p.title}</span>
+        <WaitingBadges w={w} />
         <Faces people={on} />
         <span className="shrink-0 font-mono text-xs text-muted">{count}</span>
       </li>
@@ -268,6 +276,8 @@ export function CollegeRail({
         const open = isOpen(g);
         const current = g.key === currentKey;
         const meta = groupMeta(g);
+        // Folded, a college shows what's waiting on all its pieces.
+        const folded = !open ? g.pieces.map((p) => waitingOn(p.id)).reduce((a, b) => ({ suggestions: a.suggestions + b.suggestions, comments: a.comments + b.comments }), NONE) : NONE;
         // Folded, a college shows everyone on its pieces, each person once.
         const inside = open ? [] : [...new Map(g.pieces.flatMap((p) => people?.get(p.id) ?? []).map((f) => [f.user, f] as const)).values()];
         return (
@@ -275,7 +285,7 @@ export function CollegeRail({
             key={g.key}
             role="treeitem"
             aria-level={1}
-            aria-label={`${g.name}, ${meta}${inside.length ? `, ${hereLabel(inside)}` : ""}`}
+            aria-label={`${g.name}, ${meta}${waitingLabel(folded)}${inside.length ? `, ${hereLabel(inside)}` : ""}`}
             aria-expanded={g.total ? open : undefined}
             data-rail-key={g.key}
             tabIndex={focusable === g.key ? 0 : -1}
@@ -312,6 +322,7 @@ export function CollegeRail({
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2">
                   <span className="min-w-0 flex-1 truncate font-semibold">{g.name}</span>
+                  <WaitingBadges w={folded} />
                   <Faces people={inside} />
                 </span>
                 <span className="block truncate text-xs text-muted">{meta}</span>
@@ -331,5 +342,49 @@ export function CollegeRail({
         );
       })}
     </ul>
+  );
+}
+
+const NONE: Waiting = { suggestions: 0, comments: 0 };
+
+/** ", 2 suggestions, 1 comment" for a screen reader, or nothing. */
+function waitingLabel(w: Waiting): string {
+  const parts = [
+    w.suggestions ? `${w.suggestions} suggestion${w.suggestions === 1 ? "" : "s"}` : "",
+    w.comments ? `${w.comments} comment${w.comments === 1 ? "" : "s"}` : "",
+  ].filter(Boolean);
+  return parts.length ? `, ${parts.join(", ")} waiting` : "";
+}
+
+/** Small counts beside a piece (or a folded college): suggestions in green, comments in amber. */
+function WaitingBadges({ w }: { w: Waiting }) {
+  if (!w.suggestions && !w.comments) return null;
+  return (
+    <span aria-hidden className="flex shrink-0 items-center gap-1" data-testid="rail-waiting">
+      {w.suggestions > 0 && (
+        <span
+          className="inline-flex items-center gap-0.5 rounded-full bg-add-soft px-1.5 text-[11px] leading-4 font-semibold text-add"
+          title={`${w.suggestions} suggestion${w.suggestions === 1 ? "" : "s"} waiting`}
+          data-testid="rail-suggestions"
+        >
+          <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 13l1-3.5L10.5 3l2.5 2.5L6.5 12z" />
+          </svg>
+          {w.suggestions}
+        </span>
+      )}
+      {w.comments > 0 && (
+        <span
+          className="inline-flex items-center gap-0.5 rounded-full bg-warn-soft px-1.5 text-[11px] leading-4 font-semibold text-warn"
+          title={`${w.comments} comment${w.comments === 1 ? "" : "s"} waiting`}
+          data-testid="rail-comments"
+        >
+          <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round">
+            <path d="M2.5 3.5h11v7h-6l-3 2.5v-2.5h-2z" />
+          </svg>
+          {w.comments}
+        </span>
+      )}
+    </span>
   );
 }
