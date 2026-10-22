@@ -37,6 +37,9 @@ export function WaitingBadges({ w }: { w: Waiting }) {
   );
 }
 
+/** How often the counts are read again while the page is in view. */
+const POLL_MS = 10_000;
+
 /**
  * The counts as the page loaded them, kept current: whenever a suggestion or comment the viewer
  * can read is made, changed or dealt with, they are read again (a moment later, once for a burst).
@@ -66,9 +69,16 @@ export function useLiveWaiting(initial: Record<string, Waiting> | undefined, pie
       .channel(`waiting:${deskId}:${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "suggestions" }, again)
       .subscribe((status) => status === "SUBSCRIBED" && again());
+    // Changes to a whole desk's suggestions don't always arrive live: read again now and then
+    // while the page is in view, and on coming back to it.
+    const poll = setInterval(() => document.visibilityState === "visible" && again(), POLL_MS);
+    const onVisible = () => document.visibilityState === "visible" && again();
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
       alive = false;
       if (timer) clearTimeout(timer);
+      clearInterval(poll);
+      document.removeEventListener("visibilitychange", onVisible);
       void supabase.removeChannel(channel);
     };
   }, [deskId, ids]);
