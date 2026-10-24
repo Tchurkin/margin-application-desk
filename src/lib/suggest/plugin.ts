@@ -950,7 +950,11 @@ export function suggestPlugin(opts: SuggestOptions): Plugin {
       handleDrop: () => opts.mode !== "owner",
       handleClickOn(view, _pos, _node, _nodePos, event) {
         const el = (event.target as HTMLElement | null)?.closest?.("[data-sugg]") as HTMLElement | null;
-        if (!el?.dataset.sugg) return false;
+        if (!el?.dataset.sugg) {
+          // Elsewhere in the essay: none is picked, and the margin goes back to its order.
+          if (suggestKey.getState(view.state)?.picked) view.dispatch(view.state.tr.setMeta(suggestKey, { pick: null }));
+          return false;
+        }
         opts.onPick?.(el.dataset.sugg);
         view.dispatch(view.state.tr.setMeta(suggestKey, { pick: el.dataset.sugg }));
         return false;

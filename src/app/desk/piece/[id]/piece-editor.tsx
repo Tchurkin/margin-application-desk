@@ -1106,8 +1106,7 @@ function SuggestionsPanel({
   // far as the card above it needs. Below the writing (a narrow one), they are a plain list.
   const wide = useMedia("(min-width: 64rem)");
   const listRef = useRef<HTMLUListElement>(null);
-  // Where each card sits, and the picked one when it floats over the others (no room above it).
-  const [spots, setSpots] = useState<{ tops: Record<string, number>; height: number; float?: string | null }>({ tops: {}, height: 0 });
+  const [spots, setSpots] = useState<{ tops: Record<string, number>; height: number }>({ tops: {}, height: 0 });
   const [, again] = useState(0);
   useEffect(() => {
     // The words move when the essay changes, and when anything above or around it changes size.
@@ -1160,45 +1159,35 @@ function SuggestionsPanel({
     };
     // The picked one sits exactly beside its words: the ones above it move up out of its way and
     // the ones below move down, as in a word processor's margin. With no room above it for them
-    // (they'd go past the top, out of reach), the others keep their places and it floats over them.
+    // (they'd go past the top, out of reach), they all go below it instead, in their order.
     const at = picked ? cards.findIndex((c) => c.id === picked && c.want !== null) : -1;
     let tops: Record<string, number> = {};
     let floor = 0;
-    let float: string | null = null;
     if (at >= 0) {
-      tops[cards[at].id] = Math.round(cards[at].want!);
-      let ceiling = cards[at].want! - 8;
+      const want = Math.round(cards[at].want!);
+      tops[cards[at].id] = want;
+      let ceiling = want - 8;
       for (let i = at - 1; i >= 0; i--) {
         const top = Math.round(Math.min(cards[i].want ?? ceiling, ceiling - cards[i].h));
         tops[cards[i].id] = top;
         ceiling = top - 8;
       }
-      if (ceiling + 8 < 0) {
-        ({ tops, floor } = stack(0));
-        tops[cards[at].id] = Math.round(cards[at].want!);
-        float = cards[at].id;
-      } else {
-        floor = cards[at].want! + cards[at].h + 8;
-        for (let i = at + 1; i < cards.length; i++) {
-          const top = Math.round(Math.max(cards[i].want ?? floor, floor));
-          tops[cards[i].id] = top;
-          floor = top + cards[i].h + 8;
-        }
+      floor = want + cards[at].h + 8;
+      const rest = ceiling + 8 < 0 ? cards.filter((_, i) => i !== at) : cards.slice(at + 1);
+      for (const c of rest) {
+        const top = Math.round(Math.max(c.want ?? floor, floor));
+        tops[c.id] = top;
+        floor = top + c.h + 8;
       }
     } else ({ tops, floor } = stack(0));
     floor = Math.max(floor, ...cards.map((c) => (tops[c.id] ?? 0) + c.h + 8));
     setSpots((prev) => {
       const ids = Object.keys(tops);
-      const same =
-        prev.height === floor &&
-        (prev.float ?? null) === float &&
-        ids.length === Object.keys(prev.tops).length &&
-        ids.every((id) => prev.tops[id] === tops[id]);
-      return same ? prev : { tops, height: floor, float };
+      const same = prev.height === floor && ids.length === Object.keys(prev.tops).length && ids.every((id) => prev.tops[id] === tops[id]);
+      return same ? prev : { tops, height: floor };
     });
   });
-  const spot = (id: string) =>
-    wide ? { top: spots.tops[id] ?? 0, ...(spots.float === id ? { zIndex: 5, boxShadow: "0 6px 20px rgb(0 0 0 / 0.18)" } : {}) } : undefined;
+  const spot = (id: string) => (wide ? { top: spots.tops[id] ?? 0 } : undefined);
   // Below the writing (a narrow screen), a suggestion clicked in the essay is shown by scrolling to its card.
   useEffect(() => {
     if (picked && !wide) document.querySelector(`[data-card="${picked}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
