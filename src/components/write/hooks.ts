@@ -139,8 +139,8 @@ export function useKeptScroll(box: RefObject<HTMLElement | null>, key: string, a
       const b = el.getBoundingClientRect();
       const out = axis === "y" ? a.top < b.top || a.bottom > b.bottom : a.left < b.left || a.right > b.right;
       if (out) {
-        if (axis === "y") el.scrollTop += a.top < b.top ? a.top - b.top : a.bottom - b.bottom;
-        else el.scrollLeft += a.left < b.left ? a.left - b.left : a.right - b.right;
+        if (axis === "y") el.scrollBy({ top: a.top < b.top ? a.top - b.top : a.bottom - b.bottom, behavior: "smooth" });
+        else el.scrollBy({ left: a.left < b.left ? a.left - b.left : a.right - b.right, behavior: "smooth" });
       }
     };
     settle();

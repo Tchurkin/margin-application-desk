@@ -266,11 +266,18 @@ export function AskPanel({ deskId, pieceId, pieceTitle, getSelection, collegeNam
     [pieceId],
   );
 
-  // Keep the newest exchange in view.
+  // Keep the newest exchange in view: there at once when the panel opens (or another piece does),
+  // gliding to what arrives after.
   const signature = rows.map((r) => `${r.id}:${r.status}:${r.answer.length}`).join();
+  const shown = useRef(false);
+  useEffect(() => {
+    shown.current = false;
+  }, [pieceId]);
   useEffect(() => {
     const el = logRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: shown.current ? "smooth" : "instant" });
+    shown.current = true;
   }, [signature]);
 
   async function send() {

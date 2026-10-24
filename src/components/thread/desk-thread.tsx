@@ -140,6 +140,20 @@ export function DeskThread(p: DeskThreadProps) {
   const started = (rows?.length ?? 0) > 0;
   const tooLong = draft.length > MESSAGE_MAX;
   const nearEnd = (log: HTMLElement) => log.scrollHeight - log.scrollTop - log.clientHeight < NEAR_END;
+  // Gliding to the end (not jumping). The student scrolling meanwhile takes over from it.
+  const gliding = useRef(false);
+  const glideToEnd = (log: HTMLElement) => {
+    gliding.current = true;
+    log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
+  };
+  useEffect(() => {
+    const log = logRef.current;
+    if (!log) return;
+    const takeOver = () => (gliding.current = false);
+    const events = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
+    events.forEach((e) => log.addEventListener(e, takeOver, { passive: true }));
+    return () => events.forEach((e) => log.removeEventListener(e, takeOver));
+  }, []);
 
   // In a conversation, whenever it grows (a message, an answer being written) or its window
   // shrinks (a long message being typed), keep its end in view, unless the student has scrolled up
@@ -153,10 +167,16 @@ export function DeskThread(p: DeskThreadProps) {
       return;
     }
     following.current = true;
+    let first = true;
     const observer = new ResizeObserver(() => {
-      if (following.current) log.scrollTop = log.scrollHeight;
+      // At its end at once when it opens; gliding to what arrives after.
+      if (following.current) {
+        if (first) log.scrollTop = log.scrollHeight;
+        else glideToEnd(log);
+      }
+      first = false;
       // A size change fires no scroll event: whether the end is in view is worked out here too.
-      following.current = nearEnd(log);
+      following.current = gliding.current || nearEnd(log);
       setAtEnd(following.current);
     });
     observer.observe(content);
@@ -170,24 +190,28 @@ export function DeskThread(p: DeskThreadProps) {
     const log = logRef.current;
     if (!sent || !log) return;
     following.current = true;
-    log.scrollTop = log.scrollHeight;
+    glideToEnd(log);
   }, [sent]);
 
   function onScroll() {
     const log = logRef.current;
     if (!log) return;
+    // Gliding to the end passes through places that aren't the end: that isn't scrolling away.
+    if (gliding.current) {
+      if (nearEnd(log)) gliding.current = false;
+      return;
+    }
     following.current = nearEnd(log);
     setAtEnd(following.current);
   }
 
-  // At once, not smoothly: the in-between scroll positions would read as scrolling away. The
-  // button goes, so the message box takes the focus.
+  // The button goes, so the message box takes the focus.
   function toEnd() {
     const log = logRef.current;
     if (!log) return;
     following.current = true;
     setAtEnd(true);
-    log.scrollTop = log.scrollHeight;
+    glideToEnd(log);
     if (window.matchMedia("(pointer: fine)").matches) inputRef.current?.focus({ preventScroll: true });
   }
 

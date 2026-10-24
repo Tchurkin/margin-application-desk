@@ -1107,6 +1107,8 @@ function SuggestionsPanel({
   const wide = useMedia("(min-width: 64rem)");
   const listRef = useRef<HTMLUListElement>(null);
   const [spots, setSpots] = useState<{ tops: Record<string, number>; height: number }>({ tops: {}, height: 0 });
+  // Cards already in place glide to new places; a new one is put straight where it goes.
+  const placedCards = useRef(new Set<string>());
   const [, again] = useState(0);
   useEffect(() => {
     // The words move when the essay changes, and when anything above or around it changes size.
@@ -1181,6 +1183,15 @@ function SuggestionsPanel({
       }
     } else ({ tops, floor } = stack(0));
     floor = Math.max(floor, ...cards.map((c) => (tops[c.id] ?? 0) + c.h + 8));
+    for (const c of cards) {
+      if (placedCards.current.has(c.id)) continue;
+      const el = ul.querySelector<HTMLElement>(`[data-card="${c.id}"]`);
+      if (!el) continue;
+      // Straight to its place; from the next frame on, it glides when it moves.
+      el.style.top = `${tops[c.id]}px`;
+      placedCards.current.add(c.id);
+      requestAnimationFrame(() => (el.style.transition = "top 180ms ease-out"));
+    }
     setSpots((prev) => {
       const ids = Object.keys(tops);
       const same = prev.height === floor && ids.length === Object.keys(prev.tops).length && ids.every((id) => prev.tops[id] === tops[id]);
