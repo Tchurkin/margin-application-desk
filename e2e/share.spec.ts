@@ -604,6 +604,8 @@ test("with suggestions close together, clicking one in the essay brings its card
   await last.click();
   await expect.poll(async () => Math.abs((await top(suggestions(page).last())) - (await top(last)))).toBeLessThan(40);
   expect(Math.abs((await scrolled()) - before)).toBeLessThan(5);
+  // No room above it for the other seven: they keep their places, all within reach.
+  await expect(suggestions(page).first()).toBeInViewport();
 
   // Clicking a card lines it up with its words too.
   await suggestions(page).first().locator("button").first().click();

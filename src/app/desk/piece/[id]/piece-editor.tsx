@@ -1106,7 +1106,8 @@ function SuggestionsPanel({
   // far as the card above it needs. Below the writing (a narrow one), they are a plain list.
   const wide = useMedia("(min-width: 64rem)");
   const listRef = useRef<HTMLUListElement>(null);
-  const [spots, setSpots] = useState<{ tops: Record<string, number>; height: number }>({ tops: {}, height: 0 });
+  // Where each card sits, and the picked one when it floats over the others (no room above it).
+  const [spots, setSpots] = useState<{ tops: Record<string, number>; height: number; float?: string | null }>({ tops: {}, height: 0 });
   const [, again] = useState(0);
   useEffect(() => {
     // The words move when the essay changes, and when anything above or around it changes size.
@@ -1146,11 +1147,24 @@ function SuggestionsPanel({
         return el ? { id: s.id, want, h: el.offsetHeight } : null;
       })
       .filter((c) => c !== null);
-    const tops: Record<string, number> = {};
-    // The picked one sits exactly beside its words; the ones above it move up out of its way and
-    // the ones below move down (as in a word processor's margin). Otherwise, top to bottom.
+    // Top to bottom, each beside its words or just below the one above.
+    const stack = (from: number) => {
+      const tops: Record<string, number> = {};
+      let floor = 0;
+      for (let i = from; i < cards.length; i++) {
+        const top = Math.round(Math.max(cards[i].want ?? floor, floor));
+        tops[cards[i].id] = top;
+        floor = top + cards[i].h + 8;
+      }
+      return { tops, floor };
+    };
+    // The picked one sits exactly beside its words: the ones above it move up out of its way and
+    // the ones below move down, as in a word processor's margin. With no room above it for them
+    // (they'd go past the top, out of reach), the others keep their places and it floats over them.
     const at = picked ? cards.findIndex((c) => c.id === picked && c.want !== null) : -1;
+    let tops: Record<string, number> = {};
     let floor = 0;
+    let float: string | null = null;
     if (at >= 0) {
       tops[cards[at].id] = Math.round(cards[at].want!);
       let ceiling = cards[at].want! - 8;
@@ -1159,21 +1173,32 @@ function SuggestionsPanel({
         tops[cards[i].id] = top;
         ceiling = top - 8;
       }
-      floor = cards[at].want! + cards[at].h + 8;
-    }
-    for (let i = at + 1; i < cards.length; i++) {
-      const top = Math.round(Math.max(cards[i].want ?? floor, floor));
-      tops[cards[i].id] = top;
-      floor = top + cards[i].h + 8;
-    }
-    floor = Math.max(floor, ...Object.entries(tops).map(([id, t]) => t + (cards.find((c) => c.id === id)?.h ?? 0) + 8));
+      if (ceiling + 8 < 0) {
+        ({ tops, floor } = stack(0));
+        tops[cards[at].id] = Math.round(cards[at].want!);
+        float = cards[at].id;
+      } else {
+        floor = cards[at].want! + cards[at].h + 8;
+        for (let i = at + 1; i < cards.length; i++) {
+          const top = Math.round(Math.max(cards[i].want ?? floor, floor));
+          tops[cards[i].id] = top;
+          floor = top + cards[i].h + 8;
+        }
+      }
+    } else ({ tops, floor } = stack(0));
+    floor = Math.max(floor, ...cards.map((c) => (tops[c.id] ?? 0) + c.h + 8));
     setSpots((prev) => {
       const ids = Object.keys(tops);
-      const same = prev.height === floor && ids.length === Object.keys(prev.tops).length && ids.every((id) => prev.tops[id] === tops[id]);
-      return same ? prev : { tops, height: floor };
+      const same =
+        prev.height === floor &&
+        (prev.float ?? null) === float &&
+        ids.length === Object.keys(prev.tops).length &&
+        ids.every((id) => prev.tops[id] === tops[id]);
+      return same ? prev : { tops, height: floor, float };
     });
   });
-  const spot = (id: string) => (wide ? { top: spots.tops[id] ?? 0 } : undefined);
+  const spot = (id: string) =>
+    wide ? { top: spots.tops[id] ?? 0, ...(spots.float === id ? { zIndex: 5, boxShadow: "0 6px 20px rgb(0 0 0 / 0.18)" } : {}) } : undefined;
   // Below the writing (a narrow screen), a suggestion clicked in the essay is shown by scrolling to its card.
   useEffect(() => {
     if (picked && !wide) document.querySelector(`[data-card="${picked}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
