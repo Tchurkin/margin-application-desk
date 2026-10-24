@@ -1043,9 +1043,6 @@ function SuggestionsPanel({
 }) {
   const { store } = live;
   const picked = usePicked(editor);
-  useEffect(() => {
-    if (picked) document.querySelector(`[data-card="${picked}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
-  }, [picked]);
   const open = useSyncExternalStore(
     (fn) => store.subscribe(fn),
     () => store.open(),
@@ -1087,7 +1084,14 @@ function SuggestionsPanel({
     if (!editor.isDestroyed) editor.view.dom.focus({ preventScroll: true });
   };
 
-  const pick = (id: string) => editor.view.dispatch(editor.state.tr.setMeta(suggestKey, { pick: id }));
+  /**
+   * A card clicked: its words in the essay are picked, and (beside the writing) scrolled into view,
+   * with the card lined up next to them.
+   */
+  const pick = (id: string) => {
+    editor.view.dispatch(editor.state.tr.setMeta(suggestKey, { pick: id }));
+    if (wide) editor.view.dom.querySelector(`[data-sugg="${id}"]`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  };
 
   // In the order they come in the essay (where two start at the same place, the older first);
   // ones whose words are gone go last. A comment being written sits among them, at its words.
@@ -1126,24 +1130,43 @@ function SuggestionsPanel({
     const ul = listRef.current;
     if (!ul || !wide) return;
     const base = ul.getBoundingClientRect().top;
-    const tops: Record<string, number> = {};
-    let floor = 0;
-    for (const { s, r } of placed) {
-      const el = ul.querySelector<HTMLElement>(`[data-card="${s.id}"]`);
-      if (!el) continue;
-      const pos = r.from ?? r.at;
-      let want = floor;
-      if (pos !== null) {
-        try {
-          want = editor.view.coordsAtPos(pos).top - base - 6;
-        } catch {
-          // A position the editor can't place right now: it goes after the one above.
+    // Each card, where its words are (null if the editor can't place them right now), and how tall.
+    const cards = placed
+      .map(({ s, r }) => {
+        const el = ul.querySelector<HTMLElement>(`[data-card="${s.id}"]`);
+        const pos = r.from ?? r.at;
+        let want: number | null = null;
+        if (pos !== null) {
+          try {
+            want = editor.view.coordsAtPos(pos).top - base - 6;
+          } catch {
+            // It goes after the one above.
+          }
         }
+        return el ? { id: s.id, want, h: el.offsetHeight } : null;
+      })
+      .filter((c) => c !== null);
+    const tops: Record<string, number> = {};
+    // The picked one sits exactly beside its words; the ones above it move up out of its way and
+    // the ones below move down (as in a word processor's margin). Otherwise, top to bottom.
+    const at = picked ? cards.findIndex((c) => c.id === picked && c.want !== null) : -1;
+    let floor = 0;
+    if (at >= 0) {
+      tops[cards[at].id] = Math.round(cards[at].want!);
+      let ceiling = cards[at].want! - 8;
+      for (let i = at - 1; i >= 0; i--) {
+        const top = Math.round(Math.min(cards[i].want ?? ceiling, ceiling - cards[i].h));
+        tops[cards[i].id] = top;
+        ceiling = top - 8;
       }
-      const top = Math.round(Math.max(want, floor));
-      tops[s.id] = top;
-      floor = top + el.offsetHeight + 8;
+      floor = cards[at].want! + cards[at].h + 8;
     }
+    for (let i = at + 1; i < cards.length; i++) {
+      const top = Math.round(Math.max(cards[i].want ?? floor, floor));
+      tops[cards[i].id] = top;
+      floor = top + cards[i].h + 8;
+    }
+    floor = Math.max(floor, ...Object.entries(tops).map(([id, t]) => t + (cards.find((c) => c.id === id)?.h ?? 0) + 8));
     setSpots((prev) => {
       const ids = Object.keys(tops);
       const same = prev.height === floor && ids.length === Object.keys(prev.tops).length && ids.every((id) => prev.tops[id] === tops[id]);
@@ -1151,6 +1174,10 @@ function SuggestionsPanel({
     });
   });
   const spot = (id: string) => (wide ? { top: spots.tops[id] ?? 0 } : undefined);
+  // Below the writing (a narrow screen), a suggestion clicked in the essay is shown by scrolling to its card.
+  useEffect(() => {
+    if (picked && !wide) document.querySelector(`[data-card="${picked}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [picked, wide]);
   const CARD_AT = "lg:absolute lg:inset-x-0";
 
   if (!placed.length && !undo) {

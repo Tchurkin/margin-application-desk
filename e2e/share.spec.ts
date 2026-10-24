@@ -585,6 +585,31 @@ test("the board shows the suggestions and comments waiting on each supplemental,
   await expect(card.getByTestId("rail-suggestions")).toHaveText("2", { timeout: 15_000 });
 });
 
+test("with suggestions close together, clicking one in the essay brings its card beside it, without scrolling away", async ({ page }) => {
+  const words = Array.from({ length: 8 }, (_, i) => `word${i + 1}`);
+  await studentWith(page, "dense", words.join(" ") + ".");
+  await page.getByRole("radio", { name: "Suggesting" }).click();
+  // Each word replaced by a suggestion: eight cards for one line, stacked down the margin.
+  for (const w of words) {
+    await selectWords(page, w);
+    await page.keyboard.type(w.toUpperCase());
+  }
+  await expect(suggestions(page)).toHaveCount(8);
+  const top = async (l: ReturnType<Page["locator"]>) => (await l.boundingBox())!.y;
+  const scroller = page.locator("[data-write-scroll]");
+  const scrolled = () => scroller.evaluate((el) => el.scrollTop);
+
+  const last = essay(page).locator(".sugg-ins").last();
+  const before = await scrolled();
+  await last.click();
+  await expect.poll(async () => Math.abs((await top(suggestions(page).last())) - (await top(last)))).toBeLessThan(40);
+  expect(Math.abs((await scrolled()) - before)).toBeLessThan(5);
+
+  // Clicking a card lines it up with its words too.
+  await suggestions(page).first().locator("button").first().click();
+  await expect.poll(async () => Math.abs((await top(suggestions(page).first())) - (await top(essay(page).locator(".sugg-ins").first())))).toBeLessThan(40);
+});
+
 test("a parent comments on highlighted words; the student sees it live, resolves it; the text never changes", async ({ page, browser }) => {
   await studentWith(page, "comment", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest", label: "Mom" }), "Mom Testy");

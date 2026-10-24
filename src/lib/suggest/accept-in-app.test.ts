@@ -128,6 +128,41 @@ describe.each(["owner", "suggest"] as const)("accepting in %s mode", (mode) => {
     expect(ed.getText({ blockSeparator: "\n" })).toBe("First paragraph here.\nA new one.\nAlso, Second paragraph here.\nThird one.");
   });
 
+  it("dense suggestions: accepting one leaves the ones touching it acceptable", () => {
+    const ydoc = essayDoc("The cat sat on the mat.");
+    const { ed, store } = open(ydoc, mode);
+    const rows = [
+      fromAI(ydoc, "The cat", { replace_with: "A cat" }),
+      fromAI(ydoc, "The cat", { insert_after: ", quietly," }),
+      fromAI(ydoc, "sat on", { replace_with: "sat upon" }),
+    ];
+    rows.forEach((r) => store.applyRemote(r));
+    for (const r of rows) expect(accept(ed, store, store.get(r.id)!), r.body).toBe(true);
+    expect(ed.getText()).toBe("A cat, quietly, sat upon the mat.");
+  });
+
+  it("dense suggestions: a word replaced outright keeps the one right after it", () => {
+    const ydoc = essayDoc("The cat sat on the mat.");
+    const { ed, store } = open(ydoc, mode);
+    const rows = [fromAI(ydoc, "cat", { replace_with: "dog" }), fromAI(ydoc, "The cat", { insert_after: ", quietly," })];
+    rows.forEach((r) => store.applyRemote(r));
+    for (const r of rows) expect(accept(ed, store, store.get(r.id)!), r.body).toBe(true);
+    expect(ed.getText()).toBe("The dog, quietly, sat on the mat.");
+  });
+
+  it("dense suggestions, accepted from the last to the first", () => {
+    const ydoc = essayDoc("The cat sat on the mat.");
+    const { ed, store } = open(ydoc, mode);
+    const rows = [
+      fromAI(ydoc, "The cat", { replace_with: "A cat" }),
+      fromAI(ydoc, "The cat", { insert_after: ", quietly," }),
+      fromAI(ydoc, "sat on", { replace_with: "sat upon" }),
+    ];
+    rows.forEach((r) => store.applyRemote(r));
+    for (const r of [...rows].reverse()) expect(accept(ed, store, store.get(r.id)!), r.body).toBe(true);
+    expect(ed.getText()).toBe("A cat, quietly, sat upon the mat.");
+  });
+
   it("after the student has typed elsewhere since it was suggested", () => {
     const ydoc = essayDoc("The cat sat.", "Second line.");
     const row = fromAI(ydoc, "Second", { replace_with: "Next" });

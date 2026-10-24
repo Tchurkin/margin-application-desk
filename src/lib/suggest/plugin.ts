@@ -196,6 +196,49 @@ function anchorAlive(doc: Y.Doc, rel: Y.RelativePosition): boolean {
 }
 
 /**
+ * An insertion's letter (the one just before it) was deleted, but the text right after that
+ * letter is still there: the insertion was at the end of words that were replaced (accepting
+ * "cat" to "dog" just before ", quietly,"). It belongs just before that text, after the new
+ * words: where that is, or "end" when the words ended their paragraph. Null when its words were
+ * deleted on both sides of it (it was inside what went).
+ */
+function edgeAfterDeleted(state: EditorState, y: YCtx, anchor: string, deadAt: number): number | null {
+  try {
+    const rel = Y.decodeRelativePosition(fromBase64(anchor));
+    if (!rel.item || rel.assoc >= 0) return null;
+    const item = Y.getItem(y.doc.store, rel.item) as Y.Item;
+    if (!item.deleted) return null;
+    // The letter is the last of its run, and what follows the run still stands.
+    if (rel.item.clock !== item.id.clock + item.length - 1) return null;
+    const after = (it: Y.Item) => {
+      let n = it.right as Y.Item | null;
+      while (n && !n.countable) n = n.right as Y.Item | null;
+      return n;
+    };
+    let next = after(item);
+    if (next && next.deleted) return null;
+    // Skip what was written straight after it (the new words, when "cat" became "dog"): it
+    // belongs after them, before the text that was already there.
+    let last = { client: item.id.client, clock: item.id.clock + item.length - 1 };
+    while (next && next.origin && next.origin.client === last.client && next.origin.clock === last.clock) {
+      last = { client: next.id.client, clock: next.id.clock + next.length - 1 };
+      next = after(next);
+      while (next && next.deleted) next = after(next);
+    }
+    if (!next) {
+      // The end of its paragraph.
+      const $p = state.doc.resolve(clampToText(state.doc, deadAt));
+      return $p.parent.inlineContent ? $p.end() : null;
+    }
+    const before = Y.createRelativePositionFromJSON({ item: { client: next.id.client, clock: next.id.clock }, assoc: 0 });
+    const pos = relativePositionToAbsolutePosition(y.doc, y.type, before, y.mapping as never) ?? resolveInText(state, y, before);
+    return pos === null ? null : clampToText(state.doc, pos);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * A passage whose words were partly edited: its quote's opening and closing words found near
  * `near`, in order, spanning roughly the quote's length.
  */
@@ -250,8 +293,11 @@ export function resolveSuggestion(state: EditorState, s: Suggestion): Resolved {
       }
     }
     // Its anchor holds but the words before it changed: the student decides. A loose anchor
-    // whose words are gone points nowhere trustworthy.
-    return a && (a.alive || !context.trim()) ? { s, from: null, to: null, at: a.pos, stale: true, gone: false } : gone;
+    // whose words are gone points nowhere trustworthy, unless it was at the end of words that
+    // were replaced (then it goes just after the new ones).
+    if (a && (a.alive || !context.trim())) return { s, from: null, to: null, at: a.pos, stale: true, gone: false };
+    const edge = a ? edgeAfterDeleted(state, y, s.anchor_from, a.pos) : null;
+    return edge !== null ? { s, from: null, to: null, at: edge, stale: true, gone: false } : gone;
   }
 
   const a = resolveLive(state, y, s.anchor_from);
