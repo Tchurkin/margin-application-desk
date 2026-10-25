@@ -17,12 +17,12 @@ create table if not exists average_app.migrations (version text primary key, nam
 
 do $setup$
 declare
-  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names'];
+  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names', '20261024000000_connector_comments'];
   marked text[];
   cli text[] := '{}';
   have boolean[];
   -- For each migration, the later ones that change some of the same things, and what.
-  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic","29":"function can_suggest_desk"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics","27":"function connector_requests","28":"function connector_requests"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates","29":"function can_edit_text"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow","25":"function connector_counselor_poll","26":"function connector_counselor_poll","28":"function connector_counselor_poll","29":"function can_edit_text, function can_suggest_desk"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check","25":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","26":"function connector_counselor_poll, function connector_counselor_removed, function connector_draft_answer and 1 more","28":"function connector_counselor_poll"},"11":{"12":"function connector_counselor_poll","25":"function connector_counselor_poll","26":"function connector_counselor_poll, function connector_counselor_removed","28":"function connector_counselor_poll"},"12":{"25":"function connector_counselor_poll","26":"function connector_counselor_poll","27":"function connector_requests","28":"function connector_counselor_poll, function connector_requests"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"},"25":{"26":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","27":"function connector_counselor_requests","28":"function connector_counselor_poll, function connector_counselor_requests"},"26":{"28":"function connector_counselor_poll"},"27":{"28":"function ask_on_shared_desk, function connector_counselor_requests, function connector_requests and 2 more"}}';
+  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic","29":"function can_suggest_desk"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link","32":"function connector_piece"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics","27":"function connector_requests","28":"function connector_requests"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates","29":"function can_edit_text"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow","25":"function connector_counselor_poll","26":"function connector_counselor_poll","28":"function connector_counselor_poll","29":"function can_edit_text, function can_suggest_desk"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check","25":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","26":"function connector_counselor_poll, function connector_counselor_removed, function connector_draft_answer and 1 more","28":"function connector_counselor_poll"},"11":{"12":"function connector_counselor_poll","25":"function connector_counselor_poll","26":"function connector_counselor_poll, function connector_counselor_removed","28":"function connector_counselor_poll"},"12":{"25":"function connector_counselor_poll","26":"function connector_counselor_poll","27":"function connector_requests","28":"function connector_counselor_poll, function connector_requests"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"},"25":{"26":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","27":"function connector_counselor_requests","28":"function connector_counselor_poll, function connector_counselor_requests"},"26":{"28":"function connector_counselor_poll"},"27":{"28":"function ask_on_shared_desk, function connector_counselor_requests, function connector_requests and 2 more"}}';
   late boolean[] := '{}';
   blocked text;
   applied int := 0;
@@ -62,7 +62,8 @@ begin
     ('20261020000000' = any(marked)) or ('20261020000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'counselor_answers_guests')),
     ('20261021000000' = any(marked)) or ('20261021000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'set_piece_notes')),
     ('20261022000000' = any(marked)) or ('20261022000000' = any(cli)) or (coalesce(position('comment' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'suggestions_kind_check' and c.conrelid = to_regclass('public.suggestions')))) > 0, false)),
-    ('20261023000000' = any(marked)) or ('20261023000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'piece_versions' and column_name = 'label'))
+    ('20261023000000' = any(marked)) or ('20261023000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'piece_versions' and column_name = 'label')),
+    ('20261024000000' = any(marked)) or ('20261024000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'connector_withdraw_suggestions'))
   ];
 
   for i in 1 .. array_length(names, 1) loop
@@ -4235,6 +4236,114 @@ $m20261023000000$;
     insert into average_app.migrations (version, name) values ('20261023000000', '20261023000000_version_names');
     applied := applied + 1;
     raise notice 'Applied %', '20261023000000_version_names' || case when late[31] then ' (it had been skipped)' else '' end;
+  end if;
+
+  if not have[32] then
+    execute $m20261024000000$
+-- The connector can comment on words, and withdraw what it suggested.
+--
+-- Braxton's call (10/25/26): Claude (or ChatGPT) on the student's desk can leave comments on the
+-- words of an essay, as people can, and take back its own open suggestions and comments. A comment
+-- needs the same permission as a suggestion (it goes in the margin for the student to resolve).
+-- Withdrawing touches only what this assistant left (an AI suggestion under its name) that the
+-- student hasn't resolved yet, and needs no permission: it only takes away.
+
+-- What read_piece shows: each waiting suggestion's id, and whether this assistant left it.
+create or replace function public.connector_piece(token text, piece uuid)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  l public.connector_links := public.connector_link(token);
+  p public.pieces;
+begin
+  select * into p from public.pieces where id = piece and desk_id = l.desk_id;
+  if not found then raise exception 'No piece with that id on this desk.'; end if;
+  return jsonb_build_object(
+    'id', p.id, 'title', p.title, 'prompt', p.prompt, 'status', p.status, 'notes', p.notes,
+    'limit_kind', p.limit_kind, 'limit_value', p.limit_value,
+    'doc_state', p.doc_state,
+    'updates', coalesce((select jsonb_agg(u."update" order by u.id) from public.piece_updates u where u.piece_id = p.id), '[]'::jsonb),
+    'college', (select jsonb_build_object('id', c.id, 'name', c.name, 'ai_policy', c.ai_policy,
+                                          'deadline', c.deadline, 'research', c.research)
+                  from public.colleges c where c.id = p.college_id),
+    'other_pieces', coalesce((
+      select jsonb_agg(jsonb_build_object('id', o.id, 'title', o.title, 'prompt', o.prompt,
+                                          'text', o.plain_text, 'status', o.status) order by o.sort, o.created_at)
+      from public.pieces o
+      where o.desk_id = l.desk_id and o.id <> p.id
+        and o.college_id is not distinct from p.college_id), '[]'::jsonb),
+    'open_suggestions', coalesce((
+      select jsonb_agg(jsonb_build_object('id', s.id, 'author', s.author_name, 'source', s.source, 'kind', s.kind,
+                                          'quote', s.quote, 'body', s.body, 'note', s.note,
+                                          'mine', s.source = 'ai' and s.author_name = l.label) order by s.created_at)
+      from public.suggestions s where s.piece_id = p.id and s.status = 'open'), '[]'::jsonb),
+    'student', (select jsonb_build_object('name', pr.display_name, 'about', pr.about)
+                  from public.desks d join public.profiles pr on pr.id = d.owner_id where d.id = l.desk_id)
+  );
+end;
+$$;
+
+-- Suggestions and now comments: a comment's text is its body, on the quoted words.
+create or replace function public.connector_add_suggestions_unchecked(token text, piece uuid, rows jsonb)
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  l public.connector_links := public.connector_link(token);
+  p public.pieces;
+  owner uuid;
+  r jsonb;
+  n integer := 0;
+begin
+  select * into p from public.pieces where id = piece and desk_id = l.desk_id;
+  if not found then raise exception 'No piece with that id on this desk.'; end if;
+  if jsonb_typeof(rows) <> 'array' or jsonb_array_length(rows) = 0 or jsonb_array_length(rows) > 100 then
+    raise exception 'Suggest between 1 and 100 edits at a time.';
+  end if;
+  select owner_id into owner from public.desks where id = l.desk_id;
+  for r in select * from jsonb_array_elements(rows) loop
+    if (r ->> 'kind') not in ('insert','delete','replace','comment') then raise exception 'bad kind'; end if;
+    if (r ->> 'kind') = 'comment' and (length(trim(coalesce(r ->> 'body', ''))) = 0 or length(r ->> 'body') > 4000) then
+      raise exception 'A comment needs text, at most 4000 characters.';
+    end if;
+    insert into public.suggestions
+      (id, piece_id, author_id, author_name, source, kind, anchor_from, anchor_to, quote, body, note, context, created_at)
+    values (
+      gen_random_uuid(), p.id, owner, l.label, 'ai', r ->> 'kind',
+      r ->> 'anchor_from', nullif(r ->> 'anchor_to', ''),
+      coalesce(r ->> 'quote', ''), coalesce(r ->> 'body', ''), left(coalesce(r ->> 'note', ''), 1000),
+      right(coalesce(r ->> 'context', ''), 400),
+      -- One call's suggestions share now(); a microsecond apart keeps them in the order sent.
+      now() + make_interval(secs => n * 0.000001)
+    );
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;
+revoke all on function public.connector_add_suggestions_unchecked(text, uuid, jsonb) from public, anon, authenticated;
+
+-- Take back this assistant's open suggestions and comments on a piece: the ones named, or all of
+-- them when ids is null. Returns how many were withdrawn.
+create or replace function public.connector_withdraw_suggestions(token text, piece uuid, ids uuid[])
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  l public.connector_links := public.connector_link(token);
+  n integer;
+begin
+  if not exists (select 1 from public.pieces where id = piece and desk_id = l.desk_id) then
+    raise exception 'No piece with that id on this desk.';
+  end if;
+  delete from public.suggestions s
+   where s.piece_id = piece and s.status = 'open' and s.source = 'ai' and s.author_name = l.label
+     and (ids is null or s.id = any (ids));
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+revoke all on function public.connector_withdraw_suggestions(text, uuid, uuid[]) from public;
+grant execute on function public.connector_withdraw_suggestions(text, uuid, uuid[]) to anon, authenticated;
+$m20261024000000$;
+    insert into average_app.migrations (version, name) values ('20261024000000', '20261024000000_connector_comments');
+    applied := applied + 1;
+    raise notice 'Applied %', '20261024000000_connector_comments' || case when late[32] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

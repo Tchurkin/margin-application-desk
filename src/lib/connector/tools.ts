@@ -6,7 +6,7 @@ import { z } from "zod";
 import { APP_SYSTEMS, labelOf, PIECE_STATUSES, ROUNDS } from "@/lib/domain/colleges";
 import { countChars, countWords } from "@/lib/domain/count";
 import { profileForPiece, type ProfileInfo } from "@/lib/profile/render";
-import { anchorEdit, docFromRows, flatten, type AnchoredRow } from "@/lib/suggest/anchor-text";
+import { anchorComment, anchorEdit, docFromRows, flatten, type AnchoredRow } from "@/lib/suggest/anchor-text";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { applyEdits, writeWhole, type WriteResult } from "./write";
 
@@ -18,7 +18,7 @@ import { applyEdits, writeWhole, type WriteResult } from "./write";
 export const INSTRUCTIONS = `You are connected to a high school student's Average App desk: their college list and the college essays and short answers they are writing. Help however the student asks, as a skilled college counselor and writing partner.
 
 You can work in two ways; follow what the student asks for:
-- Suggest: suggest_edits puts proposed changes on their desk as suggestions they accept or decline one by one. Use it when they want feedback, a review, or edits they will go through themselves.
+- Suggest: suggest_edits puts proposed changes on their desk as suggestions they accept or decline one by one. Use it when they want feedback, a review, or edits they will go through themselves. comment_on_piece leaves comments on specific words, in the margin beside them, for feedback that isn't a specific change. withdraw_suggestions takes back your own suggestions and comments the student hasn't resolved yet (read_piece lists them with their ids), for example when they ask you to, or before suggesting a better version.
 - Write: write_piece drafts or replaces a whole piece, and edit_piece applies specific changes directly. Use these when they ask you to draft, rewrite, or just make the changes (for example, "draft all my supplementals so I can go through them"). Before any direct write, the desk saves the current text in the piece's History, so the student can always restore it.
 You can also set up and manage the whole desk:
 - When the student gives you a list of colleges, look up each one's application system, round, deadlines and current supplemental essay prompts with word limits (search the web if you can; say which details you couldn't confirm), then call set_up_colleges once with all of them. It adds each college with a piece for every prompt, and never duplicates a college or piece already on the desk.
@@ -133,7 +133,8 @@ interface PieceInfo {
   updates: string[];
   college: { id: string; name: string; ai_policy: string; deadline: string | null; research: string } | null;
   other_pieces: { id: string; title: string; prompt: string; text: string; status: string }[];
-  open_suggestions: { author: string; source: string; kind: string; quote: string; body: string; note: string }[];
+  /** id and mine: migration 20261024. */
+  open_suggestions: { id?: string; author: string; source: string; kind: string; quote: string; body: string; note: string; mine?: boolean }[];
   student: { name: string; about: string } | null;
 }
 
@@ -220,6 +221,7 @@ export function renderPiece(p: PieceInfo, body: string): string {
   }
   if (p.open_suggestions.length) {
     lines.push("", "## Suggestions and comments waiting for the student");
+    if (p.open_suggestions.some((s) => s.mine)) lines.push("Yours are marked; withdraw_suggestions takes them back.");
     for (const s of p.open_suggestions) {
       const what =
         s.kind === "comment"
@@ -229,7 +231,8 @@ export function renderPiece(p: PieceInfo, body: string): string {
             : s.kind === "delete"
               ? `delete "${s.quote}"`
               : `replace "${s.quote}" with "${s.body}"`;
-      lines.push(`- ${s.author}${s.source === "ai" ? " (AI)" : ""}: ${what}${s.note ? `. Reason: ${s.note}` : ""}`);
+      const id = s.id ? ` [suggestion_id: ${s.id}]` : "";
+      lines.push(`- ${s.mine ? "Yours" : `${s.author}${s.source === "ai" ? " (AI)" : ""}`}${id}: ${what}${s.note ? `. Reason: ${s.note}` : ""}`);
     }
   }
   return lines.join("\n");
@@ -352,6 +355,106 @@ export function registerTools(server: McpServer, token: string) {
           ? `${rows.length} suggestion${rows.length === 1 ? "" : "s"} added to "${p.title}". The student will accept or decline each one on their desk.`
           : "No suggestions were added.";
         return { content: [{ type: "text", text: `${head}\n${report.join("\n")}` }], isError: rows.length === 0 };
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "comment_on_piece",
+    {
+      title: "Comment on an essay",
+      description:
+        "Leave comments on specific words of a piece, shown in the margin beside them for the student to read and resolve. Nothing in the text changes. " +
+        "For each comment, quote the exact current text it's about in `find` (enough to be unique), and write the comment.",
+      inputSchema: z.object({
+        piece_id: pieceId,
+        comments: z
+          .array(
+            z.object({
+              find: z.string().min(1).describe("Exact text as it currently appears in the piece. Must occur exactly once."),
+              comment: z.string().min(1).max(4000).describe("The comment, for the student."),
+            }),
+          )
+          .min(1)
+          .max(100),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async ({ piece_id, comments }) => {
+      const sb = db();
+      try {
+        const { p, doc, flat } = await loadPiece(sb, token, piece_id);
+        doc.destroy();
+        if (!flat.text.trim()) return fail("This piece is empty, so there's nothing to comment on.");
+        const rows: AnchoredRow[] = [];
+        const report: string[] = [];
+        comments.forEach((c, i) => {
+          const r = anchorComment(flat, c.find, c.comment);
+          if (r.ok) {
+            rows.push(r.row);
+            report.push(`${i + 1}. added`);
+          } else report.push(`${i + 1}. not added: ${r.reason}`);
+        });
+        if (rows.length) {
+          const { error } = await sb.rpc("connector_add_suggestions", { token, piece: piece_id, rows });
+          if (error) {
+            // Before migration 20261024 the desk takes suggestions but not comments.
+            if (/bad kind/.test(error.message)) return fail("This desk can't take comments from you yet: the site's database needs an update.");
+            return fail(error.message);
+          }
+        }
+        const head = rows.length
+          ? `${rows.length} comment${rows.length === 1 ? "" : "s"} added to "${p.title}", in the margin beside the words.`
+          : "No comments were added.";
+        return { content: [{ type: "text", text: `${head}\n${report.join("\n")}` }], isError: rows.length === 0 };
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "withdraw_suggestions",
+    {
+      title: "Withdraw suggestions",
+      description:
+        "Take back your own suggestions and comments on a piece that the student hasn't accepted, declined or resolved: the ones named by suggestion_id (from read_piece), or all of yours on the piece. " +
+        "Others' suggestions and anything already resolved stay as they are.",
+      inputSchema: z.object({
+        piece_id: pieceId,
+        suggestion_ids: z.array(z.string().uuid()).min(1).max(200).optional().describe("The suggestion_ids to withdraw, from read_piece."),
+        all: z.boolean().optional().describe("Withdraw all of your open suggestions and comments on this piece."),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: true },
+    },
+    async ({ piece_id, suggestion_ids, all }) => {
+      if (!all && !suggestion_ids?.length) return fail("Name the suggestion_ids to withdraw (read_piece lists them), or set all to true.");
+      if (all && suggestion_ids?.length) return fail("Give suggestion_ids or all, not both.");
+      const sb = db();
+      try {
+        const { data, error } = await sb.rpc("connector_withdraw_suggestions", {
+          token,
+          piece: piece_id,
+          ids: all ? null : suggestion_ids,
+        });
+        if (error) {
+          if (/connector_withdraw_suggestions/.test(error.message)) return fail("This desk can't withdraw suggestions yet: the site's database needs an update.");
+          return fail(error.message);
+        }
+        const n = data as number;
+        const asked = suggestion_ids?.length ?? 0;
+        const missed = !all && n < asked ? ` ${asked - n} of those weren't yours, or were already resolved or withdrawn, so they stay.` : "";
+        return {
+          content: [
+            {
+              type: "text",
+              text: n ? `Withdrew ${n} of your open suggestions and comments.${missed}` : "Nothing was withdrawn: none of those are yours and still open.",
+            },
+          ],
+          isError: n === 0,
+        };
       } catch (e) {
         return fail((e as Error).message);
       }

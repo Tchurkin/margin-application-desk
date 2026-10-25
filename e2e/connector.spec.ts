@@ -92,6 +92,54 @@ test("suggestions of any length arrive for review, and the student accepts a lon
   await client.close();
 });
 
+test("the AI comments on words, and withdraws its own suggestions and comments", async ({ page }) => {
+  await signUp(page, "conncomment");
+  await addCollege(page, "Comment College");
+  const pieceId = await addPiece(page, "Why us", 500);
+  await write(page, "The cat sat on the mat. It was a quiet day.");
+  const client = await connect(await makeConnector(page));
+
+  const c = await call(client, "comment_on_piece", {
+    piece_id: pieceId,
+    comments: [
+      { find: "The cat", comment: "Name the cat: a detail makes it yours." },
+      { find: "quiet day", comment: "Show the quiet instead of saying it." },
+      { find: "not in the essay", comment: "x" },
+    ],
+  });
+  expect(c.isError).toBe(false);
+  expect(c.text).toContain("2 comments added");
+  expect(c.text).toContain("3. not added");
+  expect((await call(client, "suggest_edits", { piece_id: pieceId, edits: [{ find: "sat", replace_with: "slept" }] })).isError).toBe(false);
+
+  await page.reload();
+  await expect(page.getByTestId("comment")).toHaveCount(2);
+  await expect(page.getByTestId("comment").first()).toContainText("Name the cat: a detail makes it yours.");
+  await expect(page.getByTestId("suggestion")).toHaveCount(1);
+
+  // read_piece lists them as the AI's own, with ids; one comment is taken back by its id.
+  const read = await call(client, "read_piece", { piece_id: pieceId });
+  expect(read.text).toContain("Yours [suggestion_id:");
+  const quiet = read.text.match(/suggestion_id: ([0-9a-f-]{36})\]: comments on "quiet day"/)![1];
+  const one = await call(client, "withdraw_suggestions", { piece_id: pieceId, suggestion_ids: [quiet] });
+  expect(one.text).toContain("Withdrew 1");
+  await page.reload();
+  await expect(page.getByTestId("comment")).toHaveCount(1);
+  await expect(page.getByTestId("comment")).toContainText("Name the cat");
+
+  // A suggestion the student resolved stays resolved; the rest go.
+  await page.getByTestId("comment").getByRole("button", { name: "Resolve" }).click();
+  await expect(page.getByTestId("comment")).toHaveCount(0);
+  await expect.poll(async () => (await call(client, "read_piece", { piece_id: pieceId })).text).not.toContain("Name the cat");
+  const rest = await call(client, "withdraw_suggestions", { piece_id: pieceId, all: true });
+  expect(rest.text).toContain("Withdrew 1");
+  await page.reload();
+  await expect(page.getByTestId("suggestion")).toHaveCount(0);
+  await expectEssay(page, "The cat sat on the mat. It was a quiet day.");
+  expect((await call(client, "withdraw_suggestions", { piece_id: pieceId, all: true })).isError).toBe(true);
+  await client.close();
+});
+
 test("the AI writes, edits and adds pieces directly; the old text stays in History", async ({ page }) => {
   await signUp(page, "connwrite");
   await addCollege(page, "Strict College");

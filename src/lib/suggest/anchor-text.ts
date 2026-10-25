@@ -129,7 +129,7 @@ export interface Edit {
 }
 
 export interface AnchoredRow {
-  kind: "insert" | "delete" | "replace";
+  kind: "insert" | "delete" | "replace" | "comment";
   anchor_from: string;
   anchor_to: string | null;
   quote: string;
@@ -140,6 +140,25 @@ export interface AnchoredRow {
 }
 
 export type EditOutcome = { ok: true; row: AnchoredRow } | { ok: false; reason: string };
+
+/** A comment on quoted words, anchored to them as a replacement would be: its text is its body. */
+export function anchorComment(flat: FlatDoc, find: string, comment: string): EditOutcome {
+  const f = findQuote(flat, find);
+  if (!f.ok) return f;
+  if (!comment.trim()) return { ok: false, reason: "The comment is empty." };
+  return {
+    ok: true,
+    row: {
+      kind: "comment",
+      anchor_from: anchorAtOffset(flat, f.start, 0),
+      anchor_to: anchorAtOffset(flat, f.end, -1),
+      quote: flat.text.slice(f.start, f.end),
+      body: comment.trim(),
+      note: "",
+      context: "",
+    },
+  };
+}
 
 /** How much of the text before an insertion point to keep as its context. */
 export const CONTEXT_CHARS = 120;

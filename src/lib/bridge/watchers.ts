@@ -88,6 +88,8 @@ const DOING: Record<string, (piece: string) => string> = {
   list_my_desk: () => "looking over your desk",
   read_piece: (p) => (p ? `reading “${p}”` : "reading your essay"),
   suggest_edits: (p) => (p ? `suggesting edits to “${p}”` : "suggesting edits"),
+  comment_on_piece: (p) => (p ? `commenting on “${p}”` : "commenting"),
+  withdraw_suggestions: (p) => (p ? `withdrawing suggestions on “${p}”` : "withdrawing suggestions"),
   write_piece: (p) => (p ? `writing “${p}”` : "writing"),
   edit_piece: (p) => (p ? `editing “${p}”` : "editing"),
   create_piece: () => "adding a piece",
