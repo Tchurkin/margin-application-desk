@@ -29,8 +29,9 @@
   --rec-7: #5b6472;
 }
 
+/* Dark by the device's setting, when no theme is chosen (Settings > Appearance). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme]) {
     color-scheme: dark;
     --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%23a19d94' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
     --bg: #151514;
@@ -56,6 +57,118 @@
     --rec-6: #a7d67a;
     --rec-7: #aab3c0;
   }
+}
+
+/* Themes chosen in Settings > Appearance (src/lib/appearance.ts). Ink is the device dark, chosen;
+   Midnight and High contrast start from it (its recommender colors) and change the rest. */
+
+:root[data-theme="paper"] {
+  color-scheme: light;
+}
+
+:root[data-theme="sepia"] {
+  color-scheme: light;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%236b5f4c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --bg: #f4ecd8;
+  --panel: #fbf6e9;
+  --ink: #2b2418;
+  --muted: #6b5f4c;
+  --line: #e0d3b6;
+  --accent: #8a4b1f;
+  --accent-ink: #ffffff;
+  --accent-soft: #f0dfc6;
+  --warn: #8c5a06;
+  --warn-soft: #f5e4c0;
+  --danger: #9f2f22;
+  --danger-soft: #f5dbd2;
+  --add: #2f6b3a;
+  --add-soft: #e0eed6;
+}
+
+:root[data-theme="cloud"] {
+  color-scheme: light;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%235b6375' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --bg: #f3f5f8;
+  --panel: #ffffff;
+  --ink: #1a1f2b;
+  --muted: #5b6375;
+  --line: #dce1ea;
+  --accent: #2c5fa8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e2ebf8;
+  --warn: #8a5a00;
+  --warn-soft: #f7ebcd;
+  --danger: #ad3129;
+  --danger-soft: #f8e0de;
+  --add: #1d6b48;
+  --add-soft: #dff0e6;
+}
+
+:root[data-theme="ink"],
+:root[data-theme="midnight"],
+:root[data-theme="contrast"] {
+  color-scheme: dark;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%23a19d94' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --bg: #151514;
+  --panel: #1e1e1c;
+  --ink: #ecebe6;
+  --muted: #a19d94;
+  --line: #34332f;
+  --accent: #7fbfa9;
+  --accent-ink: #0f1a16;
+  --accent-soft: #1f302a;
+  --warn: #e2b25a;
+  --warn-soft: #33291a;
+  --danger: #ef8a82;
+  --danger-soft: #3a211f;
+  --add: #6fc49b;
+  --add-soft: #14291f;
+  --rec-0: #86a8f2;
+  --rec-1: #f0a06e;
+  --rec-2: #b89af0;
+  --rec-3: #62cbc3;
+  --rec-4: #ee8ab6;
+  --rec-5: #e0c065;
+  --rec-6: #a7d67a;
+  --rec-7: #aab3c0;
+}
+
+:root[data-theme="midnight"] {
+  color-scheme: dark;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%239aa4b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --bg: #0f1420;
+  --panel: #171d2b;
+  --ink: #e6eaf2;
+  --muted: #9aa4b8;
+  --line: #2a3245;
+  --accent: #8fb4ff;
+  --accent-ink: #0c1322;
+  --accent-soft: #1c2a45;
+  --warn: #e8b860;
+  --warn-soft: #33291a;
+  --danger: #f08a84;
+  --danger-soft: #3b2023;
+  --add: #74d1a2;
+  --add-soft: #14291f;
+}
+
+:root[data-theme="contrast"] {
+  color-scheme: dark;
+  --chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5l3 3 3-3' fill='none' stroke='%23cfcfcf' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --bg: #000000;
+  --panel: #0d0d0d;
+  --ink: #ffffff;
+  --muted: #cfcfcf;
+  --line: #6b6b6b;
+  --accent: #ffd84d;
+  --accent-ink: #000000;
+  --accent-soft: #2e2706;
+  --warn: #ffcc66;
+  --warn-soft: #2e2410;
+  --danger: #ff8a80;
+  --danger-soft: #3a1310;
+  --add: #6dffb0;
+  --add-soft: #0f2e1e;
 }
 
 @theme inline {
@@ -157,6 +270,10 @@ body {
   min-height: 50vh;
   outline: none;
 }
+/* Chosen in Settings > Appearance. */
+:root[data-essay-size="small"] .essay .ProseMirror { font-size: 0.98rem; }
+:root[data-essay-size="large"] .essay .ProseMirror { font-size: 1.22rem; }
+:root[data-essay-font="sans"] .essay .ProseMirror { font-family: var(--font-sans), system-ui, sans-serif; }
 .essay .ProseMirror p { margin: 0 0 0.9em; }
 .essay .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

@@ -47,7 +47,7 @@ export default function PrivacyPage() {
       </List>
       <p>
         In your browser, the site keeps a cookie that keeps you signed in, and uses your browser&apos;s storage for edits that
-        haven&apos;t reached the server yet and for your preferences, like which panels are folded.
+        haven&apos;t reached the server yet and for your preferences, like which panels are folded and the colors you picked.
       </p>
       <p>
         There are no analytics, ads or trackers, and your essays aren&apos;t logged. We don&apos;t sell or rent your information to

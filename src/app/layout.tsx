@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Source_Serif_4 } from "next/font/google";
+import { KeepAppearance } from "@/components/keep-appearance";
 import { ScrollbarReveal } from "@/components/scrollbar-reveal";
+import { APPEARANCE_SCRIPT } from "@/lib/appearance";
 import "./globals.css";
 
 const sans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -20,10 +22,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable} h-full antialiased`}>
+    // The appearance script sets data attributes before React hydrates: they differ from the server's.
+    <html lang="en" className={`${sans.variable} ${serif.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: APPEARANCE_SCRIPT }} />
+      </head>
       <body className="flex min-h-full flex-col">
         {children}
         <ScrollbarReveal />
+        <KeepAppearance />
       </body>
     </html>
   );
