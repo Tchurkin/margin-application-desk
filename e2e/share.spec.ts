@@ -585,6 +585,52 @@ test("the Files list shows how many suggestions and comments wait on each essay"
   await expect(row().getByTestId("rail-waiting")).toHaveCount(0);
 });
 
+test("Ctrl+Z brings back a deleted comment or a withdrawn suggestion, in turn with what was suggested since", async ({ page, browser }) => {
+  await studentWith(page, "undoremove", "The cat sat.");
+
+  // The student's own comment, deleted and brought back, and kept.
+  await selectWords(page, "cat");
+  await page.getByTestId("comment-button").click();
+  await page.getByTestId("comment-draft").getByLabel("Your comment").fill("Which cat?");
+  await page.getByTestId("comment-draft").getByRole("button", { name: "Comment" }).click();
+  await expect(page.getByTestId("comment")).toHaveCount(1);
+  await page.getByTestId("comment").getByRole("button", { name: "Delete" }).click();
+  await expect(page.getByTestId("comment")).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: "Deleted." })).toBeVisible();
+  await page.keyboard.press("Control+z");
+  await expect(page.getByTestId("comment")).toHaveCount(1);
+  await expect(page.getByTestId("comment")).toContainText("Which cat?");
+  await expectEssay(page, "The cat sat.");
+  await page.keyboard.press("Control+y");
+  await expect(page.getByTestId("comment")).toHaveCount(0);
+  await page.keyboard.press("Control+z");
+  await expect(page.getByTestId("comment")).toHaveCount(1);
+
+  // Mom withdraws her suggestion, then suggests something else: Ctrl+Z takes back the newer one
+  // first, then brings the withdrawn one back, for the student too.
+  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  await openShared(mom, "Shared essay");
+  // The comment brought back reached the server.
+  await expect(mom.getByTestId("comment")).toContainText("Which cat?");
+  await essay(mom).click();
+  await mom.keyboard.press("Control+End");
+  await mom.keyboard.type(" Quietly.");
+  await expect(suggestions(page)).toContainText("Add “ Quietly.”");
+  await suggestions(mom).getByRole("button", { name: "Withdraw" }).click();
+  await expect(suggestions(page)).toHaveCount(0);
+  await essay(mom).click();
+  await mom.keyboard.press("Control+Home");
+  await mom.keyboard.type("Today ");
+  await expect(suggestions(page)).toContainText("Add “Today ”");
+  await mom.keyboard.press("Control+z");
+  await expect(suggestions(mom)).toHaveCount(0);
+  await mom.keyboard.press("Control+z");
+  await expect(suggestions(mom)).toHaveCount(1);
+  await expect(suggestions(mom)).toContainText("Add “ Quietly.”");
+  await expect(suggestions(page)).toHaveCount(1);
+  await expect(suggestions(page)).toContainText("Add “ Quietly.”");
+});
+
 test("the board shows the suggestions and comments waiting on each supplemental, live", async ({ page, browser }) => {
   await studentWith(page, "boardcounts", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");

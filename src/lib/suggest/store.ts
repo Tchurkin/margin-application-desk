@@ -141,14 +141,32 @@ export class SuggestionStore {
     this.record({ id: row.id, before, after: next });
   }
 
-  /** Withdraw one of my suggestions. */
-  remove(id: string) {
+  /**
+   * Withdraw one of my suggestions. `record: false` leaves it out of my suggesting's undo, for
+   * the margin, which keeps its own (bringBack puts it back).
+   */
+  remove(id: string, opts: { record?: boolean } = {}) {
     const before = this.rows.get(id) ?? null;
     if (!before) return;
     this.rows.delete(id);
     // Withdrawing one the server never received deletes nothing there, which is fine.
     this.queue(id, { op: "remove" });
-    this.record({ id, before, after: null });
+    if (opts.record !== false) this.record({ id, before, after: null });
+  }
+
+  /** Put back one of mine that was withdrawn, as it was. */
+  bringBack(row: Suggestion) {
+    this.restore(row.id, row);
+  }
+
+  /** The time by the store's clock, to compare with lastUndoAt. */
+  clock(): number {
+    return this.now();
+  }
+
+  /** When my suggesting's newest undo step was made (0 if there's none). */
+  lastUndoAt(): number {
+    return this.undoStack[this.undoStack.length - 1]?.at ?? 0;
   }
 
   /** The student accepts, declines or reopens. Not part of the suggester's undo. */

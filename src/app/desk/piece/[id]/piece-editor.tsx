@@ -132,14 +132,20 @@ function useNotes(pieceId: string, initial: string, own: { save: (notes: string)
   return { notes, change, onFocus, onBlur, error };
 }
 
-/** An accept, decline or resolve, as Ctrl+Z takes it back: the essay before and after it. */
+/**
+ * An accept, decline or resolve, or a comment deleted or suggestion withdrawn, as Ctrl+Z takes it
+ * back: the essay before and after it, and when it was done.
+ */
 interface Act {
   label: string;
   id: string;
-  status: "accepted" | "declined";
+  status: "accepted" | "declined" | "removed";
   changesText: boolean;
   before: Editor["state"]["doc"];
   after: Editor["state"]["doc"];
+  at: number;
+  /** What was deleted or withdrawn, to put back. */
+  row?: Suggestion;
 }
 
 interface Live {
@@ -1065,11 +1071,10 @@ function SuggestionsPanel({
     const t = setTimeout(() => setUndo(null), 8000);
     return () => clearTimeout(t);
   }, [undo]);
-  // The last accept, decline or resolve, which Ctrl+Z takes back (text and card both) while the
-  // essay hasn't changed since. The essay's own undo would only take back the text.
-  // What was accepted, declined or resolved, newest last: Ctrl+Z takes each back in turn (the text
-  // and the card both) whenever the essay is as that left it, and Ctrl+Y (or Ctrl+Shift+Z) does it
-  // again. In between, the essay's own undo and redo work as usual.
+  // What was accepted, declined, resolved, deleted or withdrawn, newest last: Ctrl+Z takes each
+  // back in turn (the text and the card both) whenever the essay is as that left it, and Ctrl+Y
+  // (or Ctrl+Shift+Z) does it again. In between, the essay's own undo and redo work as usual, and
+  // so does a suggester's undo of what they suggested since.
   const done = useRef<Act[]>([]);
   const undone = useRef<Act[]>([]);
   const [problem, setProblem] = useState<{ id: string; text: string } | null>(null);
@@ -1077,21 +1082,27 @@ function SuggestionsPanel({
   const takeBack = () => {
     const a = done.current.pop();
     if (!a) return;
-    if (a.changesText) editor.commands.undo();
-    store.resolve(a.id, "open");
+    if (a.status === "removed") store.bringBack(a.row!);
+    else {
+      if (a.changesText) editor.commands.undo();
+      store.resolve(a.id, "open");
+    }
     undone.current.push(a);
     setUndo(null);
   };
   const doAgain = () => {
     const a = undone.current.pop();
     if (!a) return;
-    if (a.changesText) editor.commands.redo();
-    store.resolve(a.id, a.status);
+    if (a.status === "removed") store.remove(a.id, { record: false });
+    else {
+      if (a.changesText) editor.commands.redo();
+      store.resolve(a.id, a.status);
+    }
     done.current.push(a);
   };
-  const did = (a: Omit<Act, "after">) => {
+  const did = (a: Omit<Act, "after" | "at">) => {
     undoManager()?.stopCapturing();
-    done.current.push({ ...a, after: editor.state.doc });
+    done.current.push({ ...a, after: editor.state.doc, at: store.clock() });
     undone.current = [];
     setUndo({ label: a.label, run: takeBack });
     setProblem(null);
@@ -1108,6 +1119,8 @@ function SuggestionsPanel({
       const doc = editor.state.doc;
       const top = back ? done.current.at(-1) : undone.current.at(-1);
       if (!top || !doc.eq(back ? top.after : top.before)) return;
+      // Something suggested since is the suggester's own undo's to take back first.
+      if (back && store.lastUndoAt() > top.at) return;
       e.preventDefault();
       e.stopPropagation();
       if (back) takeBack();
@@ -1118,6 +1131,13 @@ function SuggestionsPanel({
     // takeBack and doAgain only read refs and the store.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
+  /** Delete my comment, or withdraw my suggestion; Ctrl+Z puts it back. */
+  const takeAway = (s: Suggestion, label: string) => {
+    const before = editor.state.doc;
+    store.remove(s.id, { record: false });
+    did({ label, id: s.id, status: "removed", changesText: false, before, row: s });
+    backToEssay();
+  };
   /** Back to the essay after a button in the margin, without scrolling it. */
   const backToEssay = () => {
     if (!editor.isDestroyed) editor.view.dom.focus({ preventScroll: true });
@@ -1347,7 +1367,7 @@ function SuggestionsPanel({
                     </button>
                   )}
                   {role !== "view" && s.author_id === me && (
-                    <button type="button" className="btn" onClick={() => store.remove(s.id)}>
+                    <button type="button" className="btn" onClick={() => takeAway(s, "Deleted.")}>
                       Delete
                     </button>
                   )}
@@ -1425,7 +1445,7 @@ function SuggestionsPanel({
                   </>
                 )}
                 {role !== "owner" && role !== "view" && s.author_id === me && (
-                  <button type="button" className="btn" onClick={() => store.remove(s.id)}>
+                  <button type="button" className="btn" onClick={() => takeAway(s, "Withdrawn.")}>
                     Withdraw
                   </button>
                 )}

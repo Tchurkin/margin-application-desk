@@ -167,6 +167,31 @@ describe("SuggestionStore", () => {
     expect(be.rows.get(a.id)?.body).toBe("ab");
   });
 
+  it("the margin's delete stays out of the suggester's undo, and bringBack puts it back on the server", async () => {
+    let t = 0;
+    const be = new FakeBackend();
+    const st = new SuggestionStore("p", be, new MemoryStorage(), "tab", { flushDelayMs: 0, now: () => t });
+    await st.start();
+    const c = sugg({ kind: "comment", quote: "cat", body: "Which cat?" });
+    st.put(c);
+    await st.flush();
+    t += 5000;
+    const madeAt = st.lastUndoAt();
+    st.remove(c.id, { record: false });
+    await st.flush();
+    expect(be.rows.has(c.id)).toBe(false);
+    expect(st.lastUndoAt()).toBe(madeAt);
+    expect(st.clock()).toBeGreaterThan(madeAt);
+
+    st.bringBack(c);
+    await st.flush();
+    expect(st.open().map((x) => x.body)).toEqual(["Which cat?"]);
+    expect(be.rows.get(c.id)?.body).toBe("Which cat?");
+    // Its own undo still holds only the comment's making.
+    expect(st.undo()).toBe(true);
+    expect(st.undo()).toBe(false);
+  });
+
   it("a suggestion the student resolved can't be edited, and the store takes the server's word", async () => {
     const be = new FakeBackend();
     const st = new SuggestionStore("p", be, new MemoryStorage(), "tab", { flushDelayMs: 0 });

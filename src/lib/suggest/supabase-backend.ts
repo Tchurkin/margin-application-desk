@@ -56,6 +56,8 @@ export class SupabaseSuggestionBackend implements SuggestionBackend {
       created_at: s.created_at,
     };
     if (s.context) row.context = s.context;
+    // A reason (an assistant's), kept when one of its comments is put back.
+    if (s.note) row.note = s.note;
     let { error } = await this.supabase.from("suggestions").upsert(row, { onConflict: "id" });
     if (missingColumn(error) && "context" in row) {
       delete row.context;
