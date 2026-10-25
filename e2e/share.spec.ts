@@ -117,12 +117,9 @@ test("replace, delete and decline; the student's text only changes on accept", a
   await studentWith(page, "replace", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Dad");
   await openShared(mom, "Shared essay");
-  await essay(mom).click();
 
   // Select "cat" and type "dog".
-  await mom.keyboard.press("Control+Home");
-  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
-  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await selectWords(mom, "cat");
   await mom.keyboard.type("dog");
   // Backspace "sat" at the end (three presses make one suggestion).
   await mom.keyboard.press("Control+End");
@@ -462,10 +459,7 @@ test("Ctrl+Z takes back an accept: the text and the suggestion both come back", 
   await studentWith(page, "undoaccept", "The cat sat.");
   const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
   await openShared(mom, "Shared essay");
-  await essay(mom).click();
-  await mom.keyboard.press("Control+Home");
-  for (let i = 0; i < 4; i++) await mom.keyboard.press("ArrowRight");
-  for (let i = 0; i < 3; i++) await mom.keyboard.press("Shift+ArrowRight");
+  await selectWords(mom, "cat");
   await mom.keyboard.type("dog");
   await expect(suggestions(page)).toHaveCount(1);
 
