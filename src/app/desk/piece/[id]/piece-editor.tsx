@@ -7,6 +7,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { yUndoPluginKey } from "@tiptap/y-tiptap";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AnswerText, InlineText } from "@/components/ask/answer-text";
 import { FormattedTextarea } from "@/components/formatted-textarea";
@@ -129,6 +130,16 @@ function useNotes(pieceId: string, initial: string, own: { save: (notes: string)
     void (own ? own.flush() : flush());
   };
   return { notes, change, onFocus, onBlur, error };
+}
+
+/** An accept, decline or resolve, as Ctrl+Z takes it back: the essay before and after it. */
+interface Act {
+  label: string;
+  id: string;
+  status: "accepted" | "declined";
+  changesText: boolean;
+  before: Editor["state"]["doc"];
+  after: Editor["state"]["doc"];
 }
 
 interface Live {
@@ -1056,28 +1067,56 @@ function SuggestionsPanel({
   }, [undo]);
   // The last accept, decline or resolve, which Ctrl+Z takes back (text and card both) while the
   // essay hasn't changed since. The essay's own undo would only take back the text.
-  const recent = useRef<{ run: () => void; doc: Editor["state"]["doc"] } | null>(null);
+  // What was accepted, declined or resolved, newest last: Ctrl+Z takes each back in turn (the text
+  // and the card both) whenever the essay is as that left it, and Ctrl+Y (or Ctrl+Shift+Z) does it
+  // again. In between, the essay's own undo and redo work as usual.
+  const done = useRef<Act[]>([]);
+  const undone = useRef<Act[]>([]);
   const [problem, setProblem] = useState<{ id: string; text: string } | null>(null);
-  const did = (label: string, run: () => void) => {
-    setUndo({ label, run });
-    recent.current = { run, doc: editor.state.doc };
+  const undoManager = () => (yUndoPluginKey.getState(editor.state) as { undoManager?: { stopCapturing(): void } } | undefined)?.undoManager;
+  const takeBack = () => {
+    const a = done.current.pop();
+    if (!a) return;
+    if (a.changesText) editor.commands.undo();
+    store.resolve(a.id, "open");
+    undone.current.push(a);
+    setUndo(null);
+  };
+  const doAgain = () => {
+    const a = undone.current.pop();
+    if (!a) return;
+    if (a.changesText) editor.commands.redo();
+    store.resolve(a.id, a.status);
+    done.current.push(a);
+  };
+  const did = (a: Omit<Act, "after">) => {
+    undoManager()?.stopCapturing();
+    done.current.push({ ...a, after: editor.state.doc });
+    undone.current = [];
+    setUndo({ label: a.label, run: takeBack });
     setProblem(null);
   };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (!(e.ctrlKey || e.metaKey) || e.shiftKey || e.altKey || e.key.toLowerCase() !== "z") return;
-      const r = recent.current;
-      if (!r || editor.isDestroyed || editor.state.doc !== r.doc) return;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || editor.isDestroyed) return;
+      const k = e.key.toLowerCase();
+      const back = k === "z" && !e.shiftKey;
+      const again = k === "y" || (k === "z" && e.shiftKey);
+      if (!back && !again) return;
       const at = document.activeElement as HTMLElement | null;
       if (at && at !== document.body && !editor.view.dom.contains(at) && !at.closest("#essay-margin")) return;
+      const doc = editor.state.doc;
+      const top = back ? done.current.at(-1) : undone.current.at(-1);
+      if (!top || !doc.eq(back ? top.after : top.before)) return;
       e.preventDefault();
       e.stopPropagation();
-      recent.current = null;
-      setUndo(null);
-      r.run();
+      if (back) takeBack();
+      else doAgain();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
+    // takeBack and doAgain only read refs and the store.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editor]);
   /** Back to the essay after a button in the margin, without scrolling it. */
   const backToEssay = () => {
@@ -1298,8 +1337,9 @@ function SuggestionsPanel({
                       type="button"
                       className="btn"
                       onClick={() => {
+                        const before = editor.state.doc;
                         store.resolve(s.id, "accepted");
-                        did("Resolved.", () => store.resolve(s.id, "open"));
+                        did({ label: "Resolved.", id: s.id, status: "accepted", changesText: false, before });
                         backToEssay();
                       }}
                     >
@@ -1355,6 +1395,8 @@ function SuggestionsPanel({
                       disabled={r.gone && s.kind !== "insert"}
                       onClick={() => {
                         const before = editor.state.doc;
+                        // Its own step in the essay's undo, apart from typing just before it.
+                        undoManager()?.stopCapturing();
                         // Only marked accepted once the essay has really changed.
                         if (!acceptInto(editor.view, s) || editor.state.doc.eq(before)) {
                           console.warn("Accepting a suggestion changed nothing", { kind: s.kind, resolved: { from: r.from, to: r.to, at: r.at, stale: r.stale, gone: r.gone }, quote: s.quote, body: s.body });
@@ -1362,10 +1404,7 @@ function SuggestionsPanel({
                           return;
                         }
                         store.resolve(s.id, "accepted");
-                        did("Accepted.", () => {
-                          editor.commands.undo();
-                          store.resolve(s.id, "open");
-                        });
+                        did({ label: "Accepted.", id: s.id, status: "accepted", changesText: true, before });
                         backToEssay();
                       }}
                     >
@@ -1375,8 +1414,9 @@ function SuggestionsPanel({
                       type="button"
                       className="btn"
                       onClick={() => {
+                        const before = editor.state.doc;
                         store.resolve(s.id, "declined");
-                        did("Declined.", () => store.resolve(s.id, "open"));
+                        did({ label: "Declined.", id: s.id, status: "declined", changesText: false, before });
                         backToEssay();
                       }}
                     >

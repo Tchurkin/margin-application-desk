@@ -482,6 +482,34 @@ test("Ctrl+Z takes back an accept: the text and the suggestion both come back", 
   await expectEssay(page, "The dog sat.");
 });
 
+test("Ctrl+Z takes back accepts one at a time, and Ctrl+Y does them again", async ({ page, browser }) => {
+  await studentWith(page, "undostack", "The cat sat.");
+  const mom = await join(browser, await makeLink(page, { role: "suggest" }), "Mom");
+  await openShared(mom, "Shared essay");
+  await selectWords(mom, "cat");
+  await mom.keyboard.type("dog");
+  await expect(suggestions(page)).toHaveCount(1);
+  await selectWords(mom, "sat");
+  await mom.keyboard.type("ran");
+  await expect(suggestions(page)).toHaveCount(2);
+
+  await suggestions(page).first().getByRole("button", { name: "Accept" }).click();
+  await expectEssay(page, "The dog sat.");
+  await suggestions(page).first().getByRole("button", { name: "Accept" }).click();
+  await expectEssay(page, "The dog ran.");
+  await expect(suggestions(page)).toHaveCount(0);
+
+  await page.keyboard.press("Control+z");
+  await expectEssay(page, "The dog sat.");
+  await expect(suggestions(page)).toHaveCount(1);
+  await page.keyboard.press("Control+z");
+  await expectEssay(page, "The cat sat.");
+  await expect(suggestions(page)).toHaveCount(2);
+  await page.keyboard.press("Control+y");
+  await expectEssay(page, "The dog sat.");
+  await expect(suggestions(page)).toHaveCount(1);
+});
+
 test("a parent's awkward suggestions across paragraphs all go in when the student accepts them", async ({ page, browser }) => {
   await studentWith(page, "awkward", "");
   await essay(page).click();

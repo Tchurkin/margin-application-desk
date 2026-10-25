@@ -773,9 +773,11 @@ export function acceptInto(view: EditorView, s: Suggestion): boolean {
   if (s.kind === "comment") return false;
   const r = resolveSuggestion(view.state, s);
   const tr = view.state.tr;
+  let placed: { from: number; to: number } | null = null;
   if (s.kind === "insert") {
     if (r.at === null) return false;
-    insertLines(tr, r.at, s.body);
+    const at = afterOlder(view.state, s, r.at);
+    placed = { from: at, to: insertLines(tr, at, s.body) };
   } else {
     if (r.from === null || r.to === null) return false;
     tr.delete(r.from, r.to);
@@ -788,7 +790,47 @@ export function acceptInto(view: EditorView, s: Suggestion): boolean {
   // editor without a word: then it isn't accepted.
   if (!tr.docChanged) return false;
   view.dispatch(tr.setMeta(DIRECT_EDIT, true));
+  if (placed && placed.to > placed.from) remember(view.state, s, placed);
   return true;
+}
+
+/*
+ * Insertions accepted at one spot keep their order. Two suggested at the same place (two additions
+ * after the same word) are tied to the same letter, so the second accepted would go in before the
+ * first. Each accepted insertion's text is remembered (for this page), and a later one at its start
+ * goes in after it; an earlier one still goes before it.
+ */
+const acceptedHere = new WeakMap<Y.Doc, { created: string; from: string; to: string }[]>();
+
+function afterOlder(state: EditorState, s: Suggestion, at: number): number {
+  const y = yctx(state);
+  const list = y ? acceptedHere.get(y.doc) : undefined;
+  if (!y || !list?.length) return at;
+  for (let moved = true, n = 0; moved && n < 50; n++) {
+    moved = false;
+    for (const a of list) {
+      if (a.created > s.created_at) continue;
+      const from = resolveLive(state, y, a.from);
+      const to = resolveLive(state, y, a.to);
+      if (from && to && from.alive && to.alive && from.pos === at && to.pos > at) {
+        at = to.pos;
+        moved = true;
+      }
+    }
+  }
+  return at;
+}
+
+function remember(state: EditorState, s: Suggestion, placed: { from: number; to: number }) {
+  const y = yctx(state);
+  if (!y) return;
+  try {
+    const list = acceptedHere.get(y.doc) ?? [];
+    list.push({ created: s.created_at, from: anchorAt(state, placed.from, 0), to: anchorAt(state, placed.to, -1) });
+    acceptedHere.set(y.doc, list.slice(-200));
+  } catch {
+    // Not remembered: a later one at the same spot goes before it, as before.
+  }
 }
 
 // ─── the plugin ─────────────────────────────────────────────────────────────

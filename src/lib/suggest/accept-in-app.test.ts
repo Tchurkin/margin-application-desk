@@ -150,6 +150,20 @@ describe.each(["owner", "suggest"] as const)("accepting in %s mode", (mode) => {
     expect(ed.getText()).toBe("The dog, quietly, sat on the mat.");
   });
 
+  it("two additions at the same spot come out in their order, whichever is accepted first", () => {
+    for (const order of [[0, 1], [1, 0]]) {
+      const ydoc = essayDoc("The cat sat.");
+      const { ed, store } = open(ydoc, mode);
+      const rows = [fromAI(ydoc, "cat", { insert_after: ", quietly," }), fromAI(ydoc, "cat", { insert_after: " (Mo)" })];
+      rows[0].created_at = "2026-10-01T00:00:00.000Z";
+      rows[1].created_at = "2026-10-01T00:00:01.000Z";
+      rows.forEach((r) => store.applyRemote(r));
+      for (const i of order) expect(accept(ed, store, store.get(rows[i].id)!)).toBe(true);
+      expect(ed.getText(), `accepted ${order.join(" then ")}`).toBe("The cat, quietly, (Mo) sat.");
+      ed.destroy();
+    }
+  });
+
   it("dense suggestions, accepted from the last to the first", () => {
     const ydoc = essayDoc("The cat sat on the mat.");
     const { ed, store } = open(ydoc, mode);
