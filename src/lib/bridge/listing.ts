@@ -52,6 +52,7 @@ export const WHAT: Record<RequestKind, string> = {
   interview: "the next question in the student's profile interview",
   chat: "a message from the student",
   transcript: "the student's transcript, to fill in their academics",
+  rate: "a rating for every piece of writing",
 };
 
 const FORMAT = 'The answer is shown as text: paragraphs, **bold** and simple "- " lists work.';
@@ -259,6 +260,25 @@ function transcriptSteps(r: PendingRequest, o: ListingOptions): string[] {
   ];
 }
 
+/** How to rate a piece; the rating tool says it too. */
+export const HOW_TO_RATE =
+  "A rating is a percentile, 0 to 100: of the answers other applicants to this college write for this prompt, the share this piece is better than. " +
+  "50 is a competent, true, typical answer; 70 has a specific detail and a real voice; 85 is memorable after a full stack of reading. " +
+  "Judge it honestly against the prompt and the limit: be harsher on lists, résumé recaps, claims without evidence and closing one-liners, and on the same story told twice for one college; " +
+  "kinder to specific, true moments only this student could write. The reason is one sentence the student can act on.";
+
+function rateSteps(r: PendingRequest, o: ListingOptions): string[] {
+  const lines = [`Sent: ${sentAt(r.created_at)}`];
+  if (r.prompt.trim()) lines.push(`What the student said: ${cut(r.prompt.trim(), PROMPT_MAX, "note cut")}`);
+  lines.push(
+    `To do: rate every piece on the desk that has writing in it, for every college (list_my_desk shows them, with any rating already given). ` +
+      `Read each with read_piece, then save the ratings with set_piece_ratings, as many at once as you like. ${HOW_TO_RATE} ` +
+      "Leave empty pieces unrated. " +
+      closeWith(r, o, "a short summary: the weakest pieces, in the order you'd fix them, and the strongest"),
+  );
+  return lines;
+}
+
 const STEPS: Record<RequestKind, (r: PendingRequest, o: ListingOptions) => string[]> = {
   ask: askSteps,
   polish: polishSteps,
@@ -266,6 +286,7 @@ const STEPS: Record<RequestKind, (r: PendingRequest, o: ListingOptions) => strin
   interview: interviewSteps,
   chat: chatSteps,
   transcript: transcriptSteps,
+  rate: rateSteps,
 };
 
 /** One request: a heading with its ids, then what to do. */
@@ -278,7 +299,7 @@ export function renderRequestList(rows: PendingRequest[], o: ListingOptions = {}
   if (!rows.length) {
     return (
       "Nothing is waiting from the desk right now. The student sends questions and polish requests from the Ask panel beside a piece, " +
-      "odds requests from the Strategy page, interview answers and transcripts from the Profile page, and messages from the Counselor page; " +
+      "odds requests from the Strategy page, rating requests from the board, interview answers and transcripts from the Profile page, and messages from the Counselor page; " +
       "if they just sent one, it may take a moment to arrive."
     );
   }

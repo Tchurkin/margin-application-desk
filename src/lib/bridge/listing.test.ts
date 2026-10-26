@@ -65,7 +65,7 @@ describe("renderRequestList", () => {
   });
 
   it("lets the counselor answer by replying, for every kind", () => {
-    const kinds = ["ask", "polish", "odds", "interview", "chat", "transcript"] as const;
+    const kinds = ["ask", "polish", "odds", "interview", "chat", "transcript", "rate"] as const;
     for (const kind of kinds) {
       const t = renderRequest(row(`k-${kind}`, { kind, selection: kind === "polish" ? "My robot." : "" }), {
         answer: "reply",
@@ -83,6 +83,15 @@ describe("renderRequestList", () => {
     expect(t).toContain("a message from the student [request_id: c1] (kind: chat)");
     expect(t).toContain("What should I work on this week?");
     expect(t).toContain("Reply with answer_request with request_id c1");
+  });
+
+  it("asks for a rating of every piece, for every college, saved with set_piece_ratings", () => {
+    const t = renderRequestList([row("rt1", { kind: "rate", piece_id: null, piece_title: null, prompt: "Rate every piece of writing on my desk." })]);
+    expect(t).toContain("a rating for every piece of writing [request_id: rt1] (kind: rate)");
+    expect(t).toContain("for every college");
+    expect(t).toContain("set_piece_ratings");
+    expect(t).toContain("percentile, 0 to 100");
+    expect(t).toContain("answer_request with request_id rt1");
   });
 
   it("hands a pasted transcript over whole, to be read into the academics without guessing", () => {

@@ -12,6 +12,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 import { useLiveWaiting } from "@/components/waiting-badges";
 import type { Waiting } from "@/lib/data/waiting";
 import { RecommendersBar, type LetterActions } from "./letters";
+import { ColorBySwitch, useColorBy } from "./ratings";
 import { Swimlanes, type BoardMove, type LaneContext } from "./swimlanes";
 
 /*
@@ -346,7 +347,9 @@ export function MasterBoard({
 
   const pieces = useMemo(() => withPending(data.pieces, pending), [data.pieces, pending]);
   const lanes = useMemo(() => buildLanes(data.colleges, pieces, today), [data.colleges, pieces, today]);
-  const ctx: LaneContext = { today, base, canWrite, collegeLinks, onMove: move, onSubmit: submit, letters: letterActions, waiting };
+  const anyRated = pieces.some((p) => p.rating != null);
+  const [colorBy, setColorBy] = useColorBy(anyRated);
+  const ctx: LaneContext = { today, base, canWrite, collegeLinks, onMove: move, onSubmit: submit, letters: letterActions, waiting, colorBy };
   // Submitted colleges fold on their own; Fold all is for the rest.
   const keys = lanes.filter((l) => !l.submitted).map((l) => l.key);
   const anyFolded = keys.some((k) => folded.has(k));
@@ -383,9 +386,12 @@ export function MasterBoard({
         <p role="status" className="min-h-5 text-sm text-muted">
           {notice?.kind === "done" ? notice.text : ""}
         </p>
-        <button type="button" className="btn" onClick={() => setFolded(anyFolded ? [] : keys)}>
-          {anyFolded ? "Unfold all" : "Fold all"}
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          {anyRated && <ColorBySwitch value={colorBy} onChange={setColorBy} />}
+          <button type="button" className="btn" onClick={() => setFolded(anyFolded ? [] : keys)}>
+            {anyFolded ? "Unfold all" : "Fold all"}
+          </button>
+        </div>
       </div>
       {notice?.kind === "error" && (
         <div role="alert" className="mb-3 flex items-start justify-between gap-3 rounded-lg border border-danger bg-danger-soft px-3 py-2 text-sm text-danger">

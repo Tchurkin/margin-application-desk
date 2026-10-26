@@ -17,7 +17,7 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 const SHOWN_MS = 12_000;
 const FRESH_MS = 60_000;
 const POLL_MS = 10_000;
-const TABS: NoticeTab[] = ["Write", "Strategy", "Profile", "Counselor"];
+const TABS: NoticeTab[] = ["Board", "Write", "Strategy", "Profile", "Counselor"];
 const DOT = "● ";
 
 type Seen = Pick<DeskRequest, "id" | "kind" | "status" | "piece_id" | "answered_by" | "answered_at" | "asked_by">;

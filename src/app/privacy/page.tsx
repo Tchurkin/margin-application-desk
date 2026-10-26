@@ -80,7 +80,7 @@ export default function PrivacyPage() {
           <strong>Connecting Claude or ChatGPT.</strong> You make a connector link in Settings and add it to your own Claude or
           ChatGPT account. From then on, that assistant can read your whole desk: your essays, notes, profile, academics, colleges
           and questions. It can do what you allow for that link, which is suggesting edits and commenting on your words, writing directly, or managing your
-          colleges and essays. It can take back its own suggestions and comments that you haven&apos;t resolved. Any link can also update your profile, academics and odds, fill in forms you upload (saving a filled
+          colleges and essays. It can take back its own suggestions and comments that you haven&apos;t resolved. Any link can also update your profile, academics and odds, rate your essays (which others on your desk see on the board), fill in forms you upload (saving a filled
           copy next to yours), and answer your questions. New links start
           with everything allowed; you can change that when you make one or at any time. You can turn a link off whenever you like.
         </li>

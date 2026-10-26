@@ -27,6 +27,8 @@
   --rec-5: #8a6a0b;
   --rec-6: #4f7a1c;
   --rec-7: #5b6472;
+  /* A rating of 65 to 79 (the board's rating colors use danger, warn and add for the rest). */
+  --rate-ok: #4b6a8a;
 }
 
 /* Dark by the device's setting, when no theme is chosen (Settings > Appearance). */
@@ -56,6 +58,7 @@
     --rec-5: #e0c065;
     --rec-6: #a7d67a;
     --rec-7: #aab3c0;
+    --rate-ok: #85a6c8;
   }
 }
 
@@ -131,6 +134,7 @@
   --rec-5: #e0c065;
   --rec-6: #a7d67a;
   --rec-7: #aab3c0;
+  --rate-ok: #85a6c8;
 }
 
 :root[data-theme="midnight"] {
@@ -186,6 +190,7 @@
   --color-danger-soft: var(--danger-soft);
   --color-add: var(--add);
   --color-add-soft: var(--add-soft);
+  --color-rate-ok: var(--rate-ok);
   --font-sans: var(--font-geist-sans);
   --font-serif: var(--font-serif);
 }

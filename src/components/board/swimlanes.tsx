@@ -9,6 +9,7 @@ import { ConfirmDialog } from "@/components/write/confirm-dialog";
 import { ChevronIcon } from "@/components/write/icons";
 import { WaitingBadges } from "@/components/waiting-badges";
 import { NO_WAITING, waitingLabel, type Waiting } from "@/lib/data/waiting";
+import { ratingBand, ratingPhrase, type ColorBy } from "@/lib/progress/rating";
 import { APP_SYSTEMS, labelOf, ROUNDS, type PieceStatus } from "@/lib/domain/colleges";
 import {
   countLabel,
@@ -22,6 +23,7 @@ import {
 } from "@/lib/progress/lanes";
 import { stageIndex, stageLabel, STAGES } from "@/lib/progress/stages";
 import { LetterRow, type LetterActions } from "./letters";
+import { RATING_BG, RATING_TEXT, UNRATED_STYLE } from "./ratings";
 
 /*
  * The master board: one swimlane per college, most urgent first, each with its application
@@ -47,6 +49,8 @@ export interface LaneContext {
   letters: LetterActions;
   /** Suggestions and comments waiting on each piece. */
   waiting: Record<string, Waiting>;
+  /** Cards colored by stage, or by the counselor's rating. */
+  colorBy: ColorBy;
 }
 
 const ROUND_SHORT: Record<string, string> = { rolling: "Rolling", priority: "Priority" };
@@ -197,7 +201,7 @@ function Swimlane({ lane, folded, onFold, ctx }: { lane: Lane; folded: boolean; 
             )}
           </div>
           {college && <LetterRow collegeId={college.id} collegeName={lane.name} needsLetters={college.needs_letters} actions={ctx.letters} />}
-          {folded && <StatusStrip pieces={lane.pieces} />}
+          {folded && <StatusStrip pieces={lane.pieces} colorBy={ctx.colorBy} />}
         </div>
         {college && ctx.canWrite && (
           <button
@@ -289,24 +293,42 @@ function Card({
   // A college's pieces show their own date when it differs from the deadline (an independent piece's is on its lane).
   const own = lane.college && piece.due && piece.due !== lane.college.deadline ? piece.due : null;
   const w = ctx.waiting[piece.id] ?? NO_WAITING;
+  const byRating = ctx.colorBy === "rating";
+  const band = ratingBand(piece);
   return (
     <StageSlider
       stage={piece.status}
       href={`${ctx.base}/piece/${piece.id}`}
-      name={`${piece.title}${waitingLabel(w)}`}
-      tooltip={`${piece.title}: ${countPhrase(piece)}${waitingLabel(w)}${ctx.canWrite && !lane.submitted ? " · drag to another column" : ""}`}
+      name={`${piece.title}${waitingLabel(w)}${ratingPhrase(piece, false)}`}
+      tooltip={`${piece.title}: ${countPhrase(piece)}${waitingLabel(w)}${ratingPhrase(piece, true)}${ctx.canWrite && !lane.submitted ? " · drag to another column" : ""}`}
       movable={ctx.canWrite && !lane.submitted}
       track={track}
       focusToken={`c:${piece.id}`}
       onMove={(to, token) => ctx.onMove(piece, to, token)}
       onZone={onZone}
-      className={`relative block rounded-md border border-l-[3px] border-line bg-panel px-2 py-1.5 text-sm hover:border-muted ${CARD_EDGE[piece.status]}`}
+      className={`relative block rounded-md border border-l-[3px] border-line bg-panel px-2 py-1.5 text-sm hover:border-muted ${byRating ? "border-l-transparent" : CARD_EDGE[piece.status]}`}
       dragClassName="z-10 shadow-lg"
       dragStyle={(d) => ({ transform: `translate(${d.dx}px, ${d.dy}px)` })}
     >
+      {byRating && (
+        // The card's left edge, by rating: solid for a band, hatched when not rated, faded when edited since.
+        <span
+          aria-hidden
+          data-band={band ?? "none"}
+          className={`absolute -top-px -bottom-px -left-[3px] w-[3px] rounded-l-md ${band ? RATING_BG[band] : ""} ${band && piece.rating_stale ? "opacity-35" : ""}`}
+          style={band ? undefined : UNRATED_STYLE}
+        />
+      )}
       <span className="line-clamp-2 leading-snug">{piece.title}</span>
       <span className="mt-1 flex flex-wrap items-center justify-between gap-x-2 text-xs">
-        <span className="text-muted tabular-nums">{countLabel(piece)}</span>
+        <span className="text-muted tabular-nums">
+          {countLabel(piece)}
+          {byRating && band && (
+            <span className={`ml-1.5 font-mono font-medium ${RATING_TEXT[band]} ${piece.rating_stale ? "opacity-50" : ""}`} data-testid="card-rating">
+              {piece.rating}
+            </span>
+          )}
+        </span>
         <WaitingBadges w={w} />
         {own && <DueTag date={own} today={ctx.today} />}
       </span>
@@ -314,9 +336,26 @@ function Card({
   );
 }
 
-/** One small bar per piece, colored by stage: a folded college's progress at a glance. */
-function StatusStrip({ pieces }: { pieces: ProgressPiece[] }) {
+/** One small bar per piece, colored by stage (or rating): a folded college's progress at a glance. */
+function StatusStrip({ pieces, colorBy }: { pieces: ProgressPiece[]; colorBy: ColorBy }) {
   if (!pieces.length) return null;
+  if (colorBy === "rating") {
+    return (
+      <span role="img" aria-label={pieces.map((p) => `${p.title}${ratingPhrase(p, false) || " · not rated"}`).join("; ")} className="mt-1.5 flex h-1.5 max-w-full gap-0.5">
+        {pieces.map((p) => {
+          const band = ratingBand(p);
+          return (
+            <span
+              key={p.id}
+              title={`${p.title}${ratingPhrase(p, false) || ": not rated"}`}
+              className={`max-w-6 min-w-1 flex-1 rounded-sm ${band ? RATING_BG[band] : ""} ${band && p.rating_stale ? "opacity-35" : ""}`}
+              style={band ? undefined : UNRATED_STYLE}
+            />
+          );
+        })}
+      </span>
+    );
+  }
   return (
     <span role="img" aria-label={stageSummary(pieces)} className="mt-1.5 flex h-1.5 max-w-full gap-0.5">
       {pieces.map((p) => (

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { noticeFor, onTab, showing } from "./notices";
 
-const r = (kind: "ask" | "polish" | "odds" | "transcript" | "chat" | "interview", piece_id: string | null = null) => ({
+const r = (kind: "ask" | "polish" | "odds" | "transcript" | "chat" | "interview" | "rate", piece_id: string | null = null) => ({
   id: "r1",
   kind,
   piece_id,
@@ -14,6 +14,7 @@ describe("answer notices", () => {
     expect(noticeFor(r("interview"), "/desk/profile")?.tab).toBe("Counselor");
     expect(noticeFor(r("odds"), "/desk")).toMatchObject({ tab: "Strategy", text: "Claude estimated your odds." });
     expect(noticeFor(r("transcript"), "/desk")).toMatchObject({ tab: "Profile", href: "/desk/profile#academics" });
+    expect(noticeFor(r("rate"), "/desk/write")).toEqual({ id: "r1", tab: "Board", href: "/desk", text: "Claude rated your essays." });
     expect(noticeFor(r("ask", "p1"), "/desk", "Why us?")).toMatchObject({
       tab: "Write",
       href: "/desk/piece/p1",
@@ -26,6 +27,9 @@ describe("answer notices", () => {
   it("stays quiet when the answer is already in front of the student", () => {
     expect(noticeFor(r("chat"), "/desk/counselor")).toBeNull();
     expect(noticeFor(r("odds"), "/desk/strategy")).toBeNull();
+    expect(noticeFor(r("rate"), "/desk")).toBeNull();
+    expect(onTab("Board", "/desk")).toBe(true);
+    expect(onTab("Board", "/desk/write")).toBe(false);
     expect(noticeFor(r("transcript"), "/desk/profile")).toBeNull();
     expect(noticeFor(r("transcript"), "/desk/counselor")).toBeNull();
     expect(noticeFor(r("ask", "p1"), "/desk/piece/p1")).toBeNull();

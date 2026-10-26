@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { MasterBoard } from "@/components/board/master-board";
+import { RateRequest } from "@/components/board/ratings";
+import { REQUEST_COLS, type DeskRequest } from "@/lib/bridge/requests";
 import { StatTiles } from "@/components/board/stat-tiles";
 import { boardStats } from "@/components/board/summary";
 import { loadDesk, todayISO } from "@/lib/data/queries";
@@ -10,11 +12,23 @@ import { requireDesk } from "@/lib/supabase/server";
 
 export default async function BoardPage() {
   const { supabase, userId, desk } = await requireDesk();
-  const [{ colleges, pieces }, board, { data: profile }] = await Promise.all([
+  const [{ colleges, pieces }, board, { data: profile }, rates, links] = await Promise.all([
     loadDesk(supabase, desk.id),
     loadProgress(supabase, desk.id),
     supabase.from("profiles").select("display_name").eq("id", userId).single(),
+    supabase
+      .from("desk_requests")
+      .select(REQUEST_COLS)
+      .eq("desk_id", desk.id)
+      .eq("kind", "rate")
+      .in("status", ["pending", "answered"])
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabase.from("connector_links").select("label").eq("desk_id", desk.id).is("revoked_at", null),
   ]);
+  const rateRows = (rates.data ?? []) as unknown as DeskRequest[];
+  const labels = new Set((links.data ?? []).map((l: { label: string }) => l.label.toLowerCase()));
+  const assistants = (["claude", "chatgpt"] as const).filter((a) => labels.has(a));
   const today = todayISO();
   const waiting = await loadWaiting(supabase, board.pieces.map((p) => p.id));
   const ca = checkCommonApp(colleges);
@@ -53,6 +67,18 @@ export default async function BoardPage() {
       )}
 
       {(colleges.length > 0 || pieces.length > 0) && <StatTiles stats={boardStats(colleges, pieces, today)} today={today} />}
+
+      {pieces.length > 0 && (
+        <RateRequest
+          deskId={desk.id}
+          assistants={assistants}
+          pending={rateRows.find((r) => r.status === "pending") ?? null}
+          last={rateRows.find((r) => r.status === "answered") ?? null}
+          // Rating requests need migration 20261025; until then the query finds none, and the
+          // ratings column is missing too.
+          bridge={!rates.error && board.pieces.every((p) => "rating" in p)}
+        />
+      )}
 
       <MasterBoard
         deskId={desk.id}

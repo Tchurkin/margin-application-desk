@@ -7,7 +7,7 @@ import type { DeskRequest } from "./requests";
  */
 
 /** The desk tabs an answer can light up (DeskNav's labels). */
-export type NoticeTab = "Write" | "Strategy" | "Profile" | "Counselor";
+export type NoticeTab = "Board" | "Write" | "Strategy" | "Profile" | "Counselor";
 
 export interface Notice {
   id: string;
@@ -47,6 +47,8 @@ export function noticeFor(
               `${who} answered ${r.asked_by?.trim() ? `${r.asked_by.trim()}'s` : "your"} question${what}.`,
       };
     }
+    case "rate":
+      return path === "/desk" ? null : { id: r.id, tab: "Board", href: "/desk", text: `${who} rated your essays.` };
     case "odds":
       return on("/desk/strategy") ? null : { id: r.id, tab: "Strategy", href: "/desk/strategy", text: `${who} estimated your odds.` };
     case "transcript":
@@ -65,6 +67,8 @@ export function noticeFor(
 /** Whether a tab's page is open (its dot clears): Write covers every piece. */
 export function onTab(tab: NoticeTab, path: string): boolean {
   switch (tab) {
+    case "Board":
+      return path === "/desk";
     case "Write":
       return path.startsWith("/desk/write") || path.startsWith("/desk/piece/");
     case "Strategy":

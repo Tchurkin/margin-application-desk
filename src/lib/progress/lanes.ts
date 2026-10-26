@@ -33,6 +33,12 @@ export interface ProgressPiece {
   created_at?: string;
   /** Its own due date (migration 20260928); otherwise the college's deadline applies. */
   due?: string | null;
+  /** The counselor's rating (migration 20261025): see src/lib/progress/rating.ts. */
+  rating?: number | null;
+  rating_reason?: string;
+  rated_by?: string;
+  rated_at?: string | null;
+  rating_stale?: boolean;
 }
 
 export interface Lane {
@@ -214,6 +220,11 @@ export function toProgressPiece(row: Record<string, unknown>): ProgressPiece | n
   if ("sort" in row) piece.sort = num(row.sort) ?? 0;
   if ("created_at" in row) piece.created_at = str(row.created_at) ?? undefined;
   if ("due" in row) piece.due = str(row.due);
+  if ("rating" in row) piece.rating = num(row.rating);
+  if ("rating_reason" in row) piece.rating_reason = str(row.rating_reason) ?? "";
+  if ("rated_by" in row) piece.rated_by = str(row.rated_by) ?? "";
+  if ("rated_at" in row) piece.rated_at = str(row.rated_at);
+  if ("rating_stale" in row) piece.rating_stale = row.rating_stale === true;
   return piece;
 }
 

@@ -5,6 +5,7 @@ import type * as Y from "yjs";
 import { z } from "zod";
 import { APP_SYSTEMS, labelOf, PIECE_STATUSES, ROUNDS } from "@/lib/domain/colleges";
 import { countChars, countWords } from "@/lib/domain/count";
+import { HOW_TO_RATE } from "@/lib/bridge/listing";
 import { profileForPiece, type ProfileInfo } from "@/lib/profile/render";
 import { anchorComment, anchorEdit, docFromRows, flatten, type AnchoredRow } from "@/lib/suggest/anchor-text";
 import { supabaseEnv } from "@/lib/supabase/env";
@@ -27,6 +28,8 @@ You can also set up and manage the whole desk:
 The student decides what you may do: list_my_desk says whether you may write essays directly or only suggest (or only advise), and whether you may manage colleges and pieces. Stay within it; if something isn't allowed, say what you would do and that they can allow it in Settings.
 
 Profile: the student's Profile page holds sections about them (background, activities, stories, values, goals), written by them or by you. read_profile shows them; save_profile_section adds or rewrites one; order_profile_sections and delete_profile_section organize them; update_my_profile sets their name and "about me". read_piece includes the profile, so use it for every essay. The Profile page also holds files the student uploaded (school forms, a resume): read_profile lists them, read_profile_file reads one, and fill_pdf_form fills in a PDF form from what you know about the student and saves the filled copy next to the original (never guess an answer; ask). When the student asks you to interview them, ask one question at a time, follow up on specifics (moments, people, numbers, what changed), and after each answer save what you learned into well-organized sections in the student's own words; never invent details.
+
+Ratings: when the student asks you to rate their essays, rate every piece with writing in it, for every college (rating isn't writing, so a college's AI policy doesn't stop it): a percentile against other applicants to that college on that prompt, with a one-sentence reason, saved with set_piece_ratings. list_my_desk and read_piece show the ratings already given, and whether the piece was edited since.
 
 Strategy: read_strategy shows each college's admission odds, fit, cost and the published baseline (admission rate, SAT/ACT, cost), plus the student's academic profile. When asked to estimate odds, judge the student's profile against each college's admitted class and set them with set_college_strategy, with your reasoning in chance_note. update_academics records GPA, test scores, intended major, class rank and coursework.
 
@@ -83,6 +86,8 @@ interface DeskInfo {
     limit_kind: "words" | "chars" | "none";
     limit_value: number | null;
     due?: string | null;
+    /** Migration 20261025, from connector_piece_ratings. */
+    rating?: PieceRating;
   }[];
   /** Who writes the student's letters, and for which colleges (migration 20261005). */
   recommenders?: {
@@ -93,16 +98,43 @@ interface DeskInfo {
   }[];
 }
 
-/** The desk as list_my_desk shows it, with its recommenders when the database has them. */
+export interface PieceRating {
+  id: string;
+  rating: number;
+  reason: string;
+  rated_at: string;
+  rated_by: string;
+  /** The piece was edited after it was rated. */
+  stale: boolean;
+}
+
+/** The desk's ratings by piece; none before migration 20261025. */
+export async function loadRatings(sb: SupabaseClient, token: string): Promise<Map<string, PieceRating>> {
+  const { data, error } = await Promise.resolve(sb.rpc("connector_piece_ratings", { token })).catch(() => ({ data: null, error: true }));
+  if (error || !Array.isArray(data)) return new Map();
+  return new Map((data as PieceRating[]).map((r) => [r.id, r]));
+}
+
+/** The desk as list_my_desk shows it, with its recommenders and ratings when the database has them. */
 export async function loadDeskInfo(sb: SupabaseClient, token: string): Promise<DeskInfo> {
-  const [desk, recs] = await Promise.all([
+  const [desk, recs, ratings] = await Promise.all([
     sb.rpc("connector_desk", { token }),
     Promise.resolve(sb.rpc("connector_recommenders", { token })).catch(() => null),
+    loadRatings(sb, token),
   ]);
   if (desk.error) throw new Error(desk.error.message);
   const d = desk.data as DeskInfo;
   if (recs && !recs.error) d.recommenders = recs.data as DeskInfo["recommenders"];
+  for (const p of d.pieces) {
+    const r = ratings.get(p.id);
+    if (r) p.rating = r;
+  }
   return d;
+}
+
+/** "rated 72 by Claude on 2026-10-26 (edited since)". */
+export function ratingPhrase(r: PieceRating): string {
+  return `rated ${r.rating}${r.rated_by ? ` by ${r.rated_by}` : ""}${r.rated_at ? ` on ${r.rated_at.slice(0, 10)}` : ""}${r.stale ? " (edited since)" : ""}`;
 }
 
 const LETTER_WORDS = { planned: "not asked yet", requested: "asked", submitted: "submitted" } as const;
@@ -136,7 +168,11 @@ interface PieceInfo {
   /** id and mine: migration 20261024. */
   open_suggestions: { id?: string; author: string; source: string; kind: string; quote: string; body: string; note: string; mine?: boolean }[];
   student: { name: string; about: string } | null;
+  /** Loaded beside the piece (migration 20261025). */
+  rating?: PieceRating;
 }
+
+const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 function limitLine(kind: string, value: number | null) {
   if (kind === "none" || !value) return "no limit";
@@ -157,6 +193,7 @@ export function renderDesk(d: DeskInfo): string {
   const pieceLine = (p: DeskInfo["pieces"][number]) =>
     `  - ${p.title} [piece_id: ${p.id}] ${labelOf(PIECE_STATUSES, p.status)}, ${p.word_count} words, limit ${limitLine(p.limit_kind, p.limit_value)}` +
     (p.due ? `, due ${p.due}` : "") +
+    (p.rating ? `, ${ratingPhrase(p.rating)}` : "") +
     (p.prompt ? `\n    Prompt: ${p.prompt.length > 160 ? `${p.prompt.slice(0, 160)}…` : p.prompt}` : "\n    Prompt: (none entered)");
   const lettersOf = (collegeId: string) =>
     (d.recommenders ?? []).flatMap((r) =>
@@ -210,6 +247,7 @@ export function renderPiece(p: PieceInfo, body: string): string {
     "## The current text (paragraphs are separated by single line breaks)",
     body || "(empty: nothing written yet)",
   );
+  if (p.rating) lines.push("", "## Rating", `${capital(ratingPhrase(p.rating))}${p.rating.reason ? `: ${p.rating.reason}` : ""}`);
   if (p.notes) lines.push("", "## Notes from the student and the people they share with (not part of the essay)", p.notes);
   if (p.college?.research) lines.push("", `## The student's research on ${p.college.name}`, p.college.research);
   if (p.student?.about) lines.push("", "## About the student (in their words)", p.student.about);
@@ -306,12 +344,14 @@ export function registerTools(server: McpServer, token: string) {
     async ({ piece_id }) => {
       const sb = db();
       try {
-        const [{ p, doc, flat }, profile] = await Promise.all([
+        const [{ p, doc, flat }, profile, ratings] = await Promise.all([
           loadPiece(sb, token, piece_id),
           // The profile is extra context: a database without it (before migration 20261001) still reads the piece.
           sb.rpc("connector_profile", { token }).then(({ data }) => (data as ProfileInfo | null) ?? null, () => null),
+          loadRatings(sb, token),
         ]);
         doc.destroy();
+        p.rating = ratings.get(piece_id);
         const extra = profile ? profileForPiece(profile) : "";
         return text(renderPiece(p, flat.text) + (extra ? `\n\n${extra}` : ""));
       } catch (e) {
@@ -355,6 +395,42 @@ export function registerTools(server: McpServer, token: string) {
           ? `${rows.length} suggestion${rows.length === 1 ? "" : "s"} added to "${p.title}". The student will accept or decline each one on their desk.`
           : "No suggestions were added.";
         return { content: [{ type: "text", text: `${head}\n${report.join("\n")}` }], isError: rows.length === 0 };
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "set_piece_ratings",
+    {
+      title: "Rate essays",
+      description:
+        "Save your rating of one or more pieces: where each stands against other applicants to that college on that prompt. The student's board can color each piece by it. " +
+        `${HOW_TO_RATE} Rating a piece again replaces its rating; one edited since its rating shows as stale until rated again.`,
+      inputSchema: z.object({
+        ratings: z
+          .array(
+            z.object({
+              piece_id: pieceId,
+              percentile: z.number().min(0).max(100).describe("0 to 100: the share of other applicants' answers to this prompt, for this college, this piece is better than."),
+              reason: z.string().max(1000).describe("One sentence the student can act on."),
+            }),
+          )
+          .min(1)
+          .max(300),
+      }),
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
+    async ({ ratings }) => {
+      try {
+        const { data, error } = await db().rpc("connector_set_piece_ratings", { token, ratings });
+        if (error) {
+          if (/connector_set_piece_ratings/.test(error.message)) return fail("This desk can't take ratings yet: the site's database needs an update.");
+          return fail(error.message);
+        }
+        const n = data as number;
+        return text(`Saved ${n} rating${n === 1 ? "" : "s"}. The student's board shows them.`);
       } catch (e) {
         return fail((e as Error).message);
       }
