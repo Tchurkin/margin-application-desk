@@ -9,8 +9,13 @@ import { addCollege, addPiece, essay, signUp, waitSaved } from "./helpers";
 
 type ToolResult = { content: { type: string; text?: string }[]; isError?: boolean };
 async function call(client: Client, name: string, args: Record<string, unknown> = {}) {
-  const r = (await client.callTool({ name, arguments: args })) as ToolResult;
-  return { text: r.content.map((c) => c.text ?? "").join("\n"), isError: !!r.isError };
+  try {
+    const r = (await client.callTool({ name, arguments: args })) as ToolResult;
+    return { text: r.content.map((c) => c.text ?? "").join("\n"), isError: !!r.isError };
+  } catch (e) {
+    // Arguments the tool's schema rejects can come back as a protocol error instead.
+    return { text: (e as Error).message, isError: true };
+  }
 }
 
 async function connect(page: Page) {
@@ -68,6 +73,12 @@ test("Rate my essays: ratings color the board, every college's pieces, faded onc
   expect((await call(client, "read_piece", { piece_id: why })).text).toContain("Rated 72 by Claude");
   expect((await call(client, "list_my_desk")).text).toMatch(/Why Testy Tech .*rated 72 by Claude/);
   expect((await call(client, "read_piece", { piece_id: empty })).text).not.toContain("## Rating");
+  const writing = (await call(client, "read_writing")).text;
+  expect(writing).toContain("## Testy Tech");
+  expect(writing).toContain("I like the rockets club and the long winters.");
+  expect(writing).toMatch(/Why Testy Tech \[piece_id: [0-9a-f-]{36}\] .*rated 72/);
+  expect(writing).toContain("empty: nothing to rate");
+  expect(writing).toContain("This is all of it.");
 
   // Edited since: faded, and the connector says so.
   await page.goto(`/desk/piece/${why}`);

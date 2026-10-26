@@ -403,6 +403,19 @@ sub finish_current {
     Log('The saved conversation is gone; starting a new one.');
     return;
   }
+  # The conversation has grown too long to go on (and Claude Code couldn't shorten it): every later
+  # request would fail the same way. Start a new one, and try this request again there, once.
+  my $said = (defined $o->{result} ? "$o->{result}" : '') . ' ' . $errors;
+  if ($o->{is_error} && $said =~ /Prompt is too long|compaction failed/) {
+    Log('The conversation is full; starting a new one.');
+    stop_claude(0);
+    unlink $SessionFile;
+    $Resumed = 0;
+    if ($c->{tries} < 1) {
+      unshift @Queue, { id => $c->{id}, text => $c->{text}, model => $c->{model}, tries => $c->{tries} + 1, at => time };
+      return;
+    }
+  }
   my $text = defined $o->{result} ? "$o->{result}" : '';
   my $subtype = defined $o->{subtype} ? "$o->{subtype}" : '';
   if ($o->{is_error} || ($subtype ne '' && $subtype ne 'success')) {

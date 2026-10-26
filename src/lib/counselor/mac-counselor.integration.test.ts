@@ -95,6 +95,11 @@ while (my $line = <STDIN>) {
   next unless $type eq 'user';
   my $text = $m->{message}{content};
   note({ asked => $text, model => $model });
+  # A resumed conversation that has grown too long, as Claude Code reports it.
+  if ($text =~ /\(too long\)/ && $o{resume}) {
+    out({ type => 'result', subtype => 'success', is_error => JSON::PP::true, result => 'Prompt is too long · automatic compaction failed: summarization produced empty response', num_turns => 1 });
+    next;
+  }
   my $say = $text =~ /Reply with exactly: ([^\n]+)/ ? $1 : 'ok';
   my $reply = "[$model] $say";
   my $pause = $text =~ /\(very slowly\)/ ? 1.5 : $text =~ /\(slowly\)/ ? 0.35 : 0.02;
@@ -363,6 +368,18 @@ describe.runIf(runs)("the Mac counselor, with a stand-in desk and Claude Code", 
     const runs = claudeCalls().filter((c) => c.argv?.includes("stream-json"));
     expect(runs.length).toBeGreaterThanOrEqual(2);
     expect(runs.at(-1)?.argv).toEqual(expect.arrayContaining(["--resume", session]));
+  }, 40_000);
+
+  it("starts a new conversation when the old one is too long to go on, and answers there", async () => {
+    const old = readFileSync(join(dir, "session.txt"), "utf8").trim();
+    desk.ask("r5", "Reply with exactly: fresh start\n(too long)");
+    await until("r5's answer", () => !!desk.answer("r5"));
+    expect(desk.answer("r5")).toBe("[sonnet] fresh start");
+    expect(counselorLog()).toContain("The conversation is full; starting a new one.");
+    const session = readFileSync(join(dir, "session.txt"), "utf8").trim();
+    expect(session).not.toBe(old);
+    const last = claudeCalls().filter((c) => c.argv?.includes("stream-json")).at(-1);
+    expect(last?.argv).toEqual(expect.arrayContaining(["--session-id", session]));
   }, 40_000);
 
   it("removes itself when asked: its conversation, its folder and its LaunchAgent", async () => {

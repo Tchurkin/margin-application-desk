@@ -101,6 +101,7 @@ const DOING: Record<string, (piece: string) => string> = {
   read_strategy: () => "reading your college list",
   set_college_strategy: () => "setting your odds",
   set_piece_ratings: () => "rating your essays",
+  read_writing: () => "reading your essays",
   update_academics: () => "updating your academics",
   read_profile: () => "reading your profile",
   save_profile_section: () => "updating your profile",

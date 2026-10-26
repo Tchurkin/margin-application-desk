@@ -10,6 +10,7 @@ import { profileForPiece, type ProfileInfo } from "@/lib/profile/render";
 import { anchorComment, anchorEdit, docFromRows, flatten, type AnchoredRow } from "@/lib/suggest/anchor-text";
 import { supabaseEnv } from "@/lib/supabase/env";
 import { applyEdits, writeWhole, type WriteResult } from "./write";
+import { renderWriting, type WritingGroup } from "./writing";
 
 /*
  * The Average App connector: what Claude or ChatGPT can do on a student's desk.
@@ -29,7 +30,7 @@ The student decides what you may do: list_my_desk says whether you may write ess
 
 Profile: the student's Profile page holds sections about them (background, activities, stories, values, goals), written by them or by you. read_profile shows them; save_profile_section adds or rewrites one; order_profile_sections and delete_profile_section organize them; update_my_profile sets their name and "about me". read_piece includes the profile, so use it for every essay. The Profile page also holds files the student uploaded (school forms, a resume): read_profile lists them, read_profile_file reads one, and fill_pdf_form fills in a PDF form from what you know about the student and saves the filled copy next to the original (never guess an answer; ask). When the student asks you to interview them, ask one question at a time, follow up on specifics (moments, people, numbers, what changed), and after each answer save what you learned into well-organized sections in the student's own words; never invent details.
 
-Ratings: when the student asks you to rate their essays, rate every piece with writing in it, for every college (rating isn't writing, so a college's AI policy doesn't stop it): a percentile against other applicants to that college on that prompt, with a one-sentence reason, saved with set_piece_ratings. list_my_desk and read_piece show the ratings already given, and whether the piece was edited since.
+Ratings: when the student asks you to rate their essays, rate every piece with writing in it, for every college (rating isn't writing, so a college's AI policy doesn't stop it): a percentile against other applicants to that college on that prompt, with a one-sentence reason, saved with set_piece_ratings. Read the pieces with read_writing, part by part, saving each part's ratings before the next (read_piece adds the whole profile to every piece, too much for a whole desk). list_my_desk and read_piece show the ratings already given, and whether the piece was edited since.
 
 Strategy: read_strategy shows each college's admission odds, fit, cost and the published baseline (admission rate, SAT/ACT, cost), plus the student's academic profile. When asked to estimate odds, judge the student's profile against each college's admitted class and set them with set_college_strategy, with your reasoning in chance_note. update_academics records GPA, test scores, intended major, class rank and coursework.
 
@@ -130,6 +131,41 @@ export async function loadDeskInfo(sb: SupabaseClient, token: string): Promise<D
     if (r) p.rating = r;
   }
   return d;
+}
+
+/**
+ * Every piece's text, by college (in the desk's order), for read_writing. One read per college:
+ * a piece's own document, and the rest of its college's pieces as saved beside it.
+ */
+async function loadWriting(sb: SupabaseClient, token: string): Promise<WritingGroup[]> {
+  const d = await loadDeskInfo(sb, token);
+  const sets: { name: string | null; id: string | null; deadline?: string | null; pieces: DeskInfo["pieces"] }[] = [
+    ...d.colleges.map((c) => ({ name: c.name, id: c.id, deadline: c.deadline, pieces: d.pieces.filter((p) => p.college_id === c.id) })),
+    { name: null, id: null, pieces: d.pieces.filter((p) => p.college_id === null) },
+  ].filter((s) => s.pieces.length);
+  return Promise.all(
+    sets.map(async (s) => {
+      const { p, doc, flat } = await loadPiece(sb, token, s.pieces[0].id);
+      doc.destroy();
+      const texts = new Map<string, string>([[p.id, flat.text], ...p.other_pieces.map((o) => [o.id, o.text] as [string, string])]);
+      return {
+        name: s.name,
+        id: s.id,
+        deadline: s.deadline,
+        pieces: s.pieces.map((x) => ({
+          id: x.id,
+          title: x.title,
+          prompt: x.prompt ?? "",
+          status: labelOf(PIECE_STATUSES, x.status),
+          words: x.word_count,
+          limit_kind: x.limit_kind,
+          limit_value: x.limit_value,
+          text: texts.get(x.id) ?? "",
+          rating: x.rating ? { rating: x.rating.rating, stale: x.rating.stale } : null,
+        })),
+      };
+    }),
+  );
 }
 
 /** "rated 72 by Claude on 2026-10-26 (edited since)". */
@@ -395,6 +431,29 @@ export function registerTools(server: McpServer, token: string) {
           ? `${rows.length} suggestion${rows.length === 1 ? "" : "s"} added to "${p.title}". The student will accept or decline each one on their desk.`
           : "No suggestions were added.";
         return { content: [{ type: "text", text: `${head}\n${report.join("\n")}` }], isError: rows.length === 0 };
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    },
+  );
+
+  server.registerTool(
+    "read_writing",
+    {
+      title: "Read all the writing",
+      description:
+        "Every piece on the desk with its whole text, prompt, limit and any rating, grouped by college, in parts of about 40,000 characters (part 1 first). " +
+        "For work across many pieces, like rating them all or finding a story told twice for one college: it leaves out the profile and research that read_piece adds to every piece. " +
+        "skip_rated leaves out the text of colleges whose pieces all have a rating and haven't been edited since.",
+      inputSchema: z.object({
+        part: z.number().int().min(1).optional().describe("Which part, from 1."),
+        skip_rated: z.boolean().optional(),
+      }),
+      annotations: { readOnlyHint: true },
+    },
+    async ({ part, skip_rated }) => {
+      try {
+        return text(renderWriting(await loadWriting(db(), token), part ?? 1, skip_rated ?? false));
       } catch (e) {
         return fail((e as Error).message);
       }

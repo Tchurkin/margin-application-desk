@@ -271,9 +271,10 @@ function rateSteps(r: PendingRequest, o: ListingOptions): string[] {
   const lines = [`Sent: ${sentAt(r.created_at)}`];
   if (r.prompt.trim()) lines.push(`What the student said: ${cut(r.prompt.trim(), PROMPT_MAX, "note cut")}`);
   lines.push(
-    `To do: rate every piece on the desk that has writing in it, for every college (list_my_desk shows them, with any rating already given). ` +
-      `Read each with read_piece, then save the ratings with set_piece_ratings, as many at once as you like. ${HOW_TO_RATE} ` +
-      "Leave empty pieces unrated. " +
+    "To do: rate every piece on the desk that has writing in it, for every college. Read them with read_writing (part 1, then each next part), " +
+      "and save each part's ratings with set_piece_ratings before reading the next, so none are lost. Don't use read_piece for this: it adds the whole profile to every piece, too much for a whole desk. " +
+      `${HOW_TO_RATE} ` +
+      "Leave empty pieces unrated. A piece rated before and not edited since can keep its rating, unless the student asked for a fresh look. " +
       closeWith(r, o, "a short summary: the weakest pieces, in the order you'd fix them, and the strongest"),
   );
   return lines;

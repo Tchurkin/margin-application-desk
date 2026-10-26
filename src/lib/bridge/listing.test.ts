@@ -90,6 +90,7 @@ describe("renderRequestList", () => {
     expect(t).toContain("a rating for every piece of writing [request_id: rt1] (kind: rate)");
     expect(t).toContain("for every college");
     expect(t).toContain("set_piece_ratings");
+    expect(t).toContain("read_writing");
     expect(t).toContain("percentile, 0 to 100");
     expect(t).toContain("answer_request with request_id rt1");
   });

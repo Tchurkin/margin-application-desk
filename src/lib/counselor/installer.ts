@@ -353,6 +353,18 @@ function Finish-Current($o) {
     Log 'The saved conversation is gone; starting a new one.'
     return
   }
+  # The conversation has grown too long to go on (and Claude Code couldn't shorten it): every later
+  # request would fail the same way. Start a new one, and try this request again there, once.
+  if ($o.is_error -and (([string]$o.result + ' ' + (@($o.errors) -join ' ')) -match 'Prompt is too long|compaction failed')) {
+    Log 'The conversation is full; starting a new one.'
+    Stop-Claude $false
+    Remove-Item -Force -ErrorAction SilentlyContinue $SessionFile
+    $script:Resumed = $false
+    if ($c.tries -lt 1) {
+      [void]$script:Queue.Insert(0, @{ id = $c.id; text = $c.text; model = $c.model; tries = $c.tries + 1; at = Get-Date })
+      return
+    }
+  }
   $text = ''
   if ($null -ne $o.result) { $text = [string]$o.result }
   if ($o.is_error -or ($o.subtype -and $o.subtype -ne 'success')) {
