@@ -7,6 +7,8 @@ export const COLLEGE_COLS =
 export const PIECE_SUMMARY_COLS = "id, college_id, title, status, word_count, limit_kind, limit_value, sort, created_at";
 /** Piece columns added by migration 20260928 (per-piece due date, alternate versions). */
 const PIECE_NEW_COLS = ", due, variant_of";
+/** Added by migration 20261025: the counselor's rating, for the Files list. */
+const RATING_COLS = ", rating, rating_stale";
 
 /** Strategy fields on a college (migration 20260928). Absent on older databases. */
 export interface CollegeStrategy {
@@ -48,9 +50,10 @@ export async function loadDesk(supabase: SupabaseClient, deskId: string) {
   // "*" so strategy columns come back when the database has them, and nothing breaks when not.
   const [colleges, firstPieces] = await Promise.all([
     supabase.from("colleges").select("*").eq("desk_id", deskId).order("name"),
-    piecesQuery(PIECE_SUMMARY_COLS + PIECE_NEW_COLS),
+    piecesQuery(PIECE_SUMMARY_COLS + PIECE_NEW_COLS + RATING_COLS),
   ]);
   let pieces = firstPieces;
+  if (missingColumn(pieces.error)) pieces = await piecesQuery(PIECE_SUMMARY_COLS + PIECE_NEW_COLS);
   if (missingColumn(pieces.error)) pieces = await piecesQuery(PIECE_SUMMARY_COLS);
   if (colleges.error) throw colleges.error;
   if (pieces.error) throw pieces.error;

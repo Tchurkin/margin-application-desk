@@ -29,6 +29,10 @@
   --rec-7: #5b6472;
   /* Ratings (below 55, 55-64, 65-79, 80+): a plain red, orange, blue and green on every theme, never
      tinted by it (src/components/board/ratings.tsx). */
+  /* A piece that's final or submitted: green on every theme (the accent is the theme's own). */
+  --done: #2f5d50;
+  --done-soft: #e4efe9;
+  --done-ink: #ffffff;
   --rate-low: #c8352a;
   --rate-mid: #e07b10;
   --rate-ok: #2f6fb8;
@@ -62,6 +66,9 @@
     --rec-5: #e0c065;
     --rec-6: #a7d67a;
     --rec-7: #aab3c0;
+    --done: #7fbfa9;
+    --done-soft: #1f302a;
+    --done-ink: #0f1a16;
     --rate-low: #f2685c;
     --rate-mid: #f5a53e;
     --rate-ok: #6ba8ec;
@@ -87,12 +94,14 @@
   --accent: #8a4b1f;
   --accent-ink: #ffffff;
   --accent-soft: #f0dfc6;
-  --warn: #8c5a06;
-  --warn-soft: #f5e4c0;
-  --danger: #9f2f22;
+  --warn: #b8620a;
+  --warn-soft: #f6e1c2;
+  --danger: #b8321f;
   --danger-soft: #f5dbd2;
-  --add: #2f6b3a;
-  --add-soft: #e0eed6;
+  --add: #2b7a3d;
+  --add-soft: #d9ebcf;
+  --done: #2b7a3d;
+  --done-soft: #d9ebcf;
 }
 
 :root[data-theme="cloud"] {
@@ -112,6 +121,8 @@
   --danger-soft: #f8e0de;
   --add: #1d6b48;
   --add-soft: #dff0e6;
+  --done: #1d7a4c;
+  --done-soft: #dff0e6;
 }
 
 :root[data-theme="ink"],
@@ -141,6 +152,9 @@
   --rec-5: #e0c065;
   --rec-6: #a7d67a;
   --rec-7: #aab3c0;
+  --done: #7fbfa9;
+  --done-soft: #1f302a;
+  --done-ink: #0f1a16;
   --rate-low: #f2685c;
   --rate-mid: #f5a53e;
   --rate-ok: #6ba8ec;
@@ -164,6 +178,9 @@
   --danger-soft: #3b2023;
   --add: #74d1a2;
   --add-soft: #14291f;
+  --done: #5cc98e;
+  --done-soft: #14291f;
+  --done-ink: #0c1322;
 }
 
 :root[data-theme="contrast"] {
@@ -183,6 +200,9 @@
   --danger-soft: #3a1310;
   --add: #6dffb0;
   --add-soft: #0f2e1e;
+  --done: #52e394;
+  --done-soft: #0f2e1e;
+  --done-ink: #000000;
   --rate-low: #ff6f61;
   --rate-mid: #ffad33;
   --rate-ok: #75b8ff;
@@ -204,6 +224,9 @@
   --color-danger-soft: var(--danger-soft);
   --color-add: var(--add);
   --color-add-soft: var(--add-soft);
+  --color-done: var(--done);
+  --color-done-soft: var(--done-soft);
+  --color-done-ink: var(--done-ink);
   --color-rate-low: var(--rate-low);
   --color-rate-mid: var(--rate-mid);
   --color-rate-ok: var(--rate-ok);

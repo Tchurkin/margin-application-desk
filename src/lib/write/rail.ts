@@ -25,6 +25,9 @@ export interface RailPiece {
   due?: string | null;
   /** The piece this is a version of (migration 20260928). */
   variant_of?: string | null;
+  /** The counselor's rating (migration 20261025). */
+  rating?: number | null;
+  rating_stale?: boolean;
 }
 
 export interface RailGroup {

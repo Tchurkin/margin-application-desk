@@ -129,6 +129,12 @@ test("Rate this piece: one piece's rating and why, on its page, asked for from t
   await expect(page.getByRole("button", { name: /^Rating 63/ })).toBeVisible();
   await expect(panel.getByTestId("rating-reason")).toContainText("Clear, but any applicant could say it.");
   await expect(panel.getByRole("button", { name: "Rate this piece" })).toBeVisible();
+  // The Files list shows it too.
+  await page.reload();
+  const rail = page.getByRole("tree", { name: "Colleges and pieces" });
+  await expect(rail.getByTestId("rail-rating")).toHaveText("63");
+  await expect(rail.getByRole("treeitem", { name: /^Why Testy State,.*rated 63/ })).toBeVisible();
+  await page.getByRole("button", { name: /^Rating/ }).click();
 
   // Edited since: it says so once the text is saved.
   await essay(page).click();

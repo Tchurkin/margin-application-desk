@@ -8,6 +8,8 @@ import { PREF } from "@/lib/write/layout";
 import { countLabel, groupMeta, pickCollegePiece, SHARED, type RailGroup, type RailPiece } from "@/lib/write/rail";
 import { WaitingBadges } from "@/components/waiting-badges";
 import { NO_WAITING as NONE, waitingLabel, type Waiting } from "@/lib/data/waiting";
+import { RATING_BG } from "@/components/board/ratings";
+import { ratingBand, ratingPhrase } from "@/lib/progress/rating";
 import { usePref, writePref } from "./hooks";
 import { ChevronIcon, FilesIcon } from "./icons";
 
@@ -15,9 +17,25 @@ const DOT: Record<PieceStatus, string> = {
   not_started: "border border-muted bg-transparent",
   drafting: "bg-muted",
   needs_review: "bg-warn",
-  final: "bg-accent",
-  submitted: "bg-accent",
+  final: "bg-done",
+  submitted: "bg-done",
 };
+
+/** A rated piece's rating, in its band's color; faded once the piece is edited since. */
+function RatingChip({ piece }: { piece: RailPiece }) {
+  const band = ratingBand(piece);
+  if (!band) return null;
+  return (
+    <span
+      aria-hidden
+      title={`Rated ${piece.rating}${piece.rating_stale ? ", edited since" : ""}`}
+      data-testid="rail-rating"
+      className={`shrink-0 rounded px-1 font-mono text-[11px] leading-4 font-semibold text-bg ${RATING_BG[band]} ${piece.rating_stale ? "opacity-40" : ""}`}
+    >
+      {piece.rating}
+    </span>
+  );
+}
 
 export function StatusDot({ status }: { status: PieceStatus }) {
   return <span aria-hidden className={`inline-block h-2 w-2 shrink-0 rounded-full ${DOT[status]}`} />;
@@ -237,7 +255,7 @@ export function CollegeRail({
         key={p.id}
         role="treeitem"
         aria-level={level}
-        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}${waitingLabel(w)}${on.length ? `, ${hereLabel(on)}` : ""}`}
+        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}${waitingLabel(w)}${ratingPhrase(p, false).replace(" · ", ", ")}${on.length ? `, ${hereLabel(on)}` : ""}`}
         aria-current={here ? "page" : undefined}
         data-rail-key={p.id}
         tabIndex={focusable === p.id ? 0 : -1}
@@ -263,6 +281,7 @@ export function CollegeRail({
         <span className={`min-w-0 flex-1 truncate ${level === 1 ? "font-medium" : ""}`}>{p.title}</span>
         <WaitingBadges w={w} />
         <Faces people={on} />
+        <RatingChip piece={p} />
         <span className="shrink-0 font-mono text-xs text-muted">{count}</span>
       </li>
     );
@@ -327,7 +346,7 @@ export function CollegeRail({
                 <span className="block truncate text-xs text-muted">{meta}</span>
                 {g.total > 0 && (
                   <span aria-hidden className="mt-1 block h-1 overflow-hidden rounded-full bg-line">
-                    <span className="block h-full rounded-full bg-accent" style={{ width: `${(g.done / g.total) * 100}%` }} />
+                    <span className="block h-full rounded-full bg-done" style={{ width: `${(g.done / g.total) * 100}%` }} />
                   </span>
                 )}
               </span>
