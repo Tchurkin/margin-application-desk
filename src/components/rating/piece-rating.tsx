@@ -142,7 +142,7 @@ export function PieceRatingPanel({ state, deskId, pieceId, owner }: { state: Pie
       {r && band ? (
         <div className="flex items-start gap-3">
           <span
-            className={`grid size-11 shrink-0 place-items-center rounded-md font-mono text-lg font-semibold text-white ${RATING_BG[band]} ${r.rating_stale ? "opacity-40" : ""}`}
+            className={`grid size-11 shrink-0 place-items-center rounded-md font-mono text-lg font-semibold text-bg ${RATING_BG[band]} ${r.rating_stale ? "opacity-40" : ""}`}
             aria-hidden
           >
             {r.rating}

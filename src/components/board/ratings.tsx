@@ -16,8 +16,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
  */
 
 /** A card's left strip, a folded college's bar and a rating's number, by band. */
-export const RATING_BG: Record<RatingBand, string> = { low: "bg-danger", mid: "bg-warn", ok: "bg-rate-ok", high: "bg-add" };
-export const RATING_TEXT: Record<RatingBand, string> = { low: "text-danger", mid: "text-warn", ok: "text-rate-ok", high: "text-add" };
+export const RATING_BG: Record<RatingBand, string> = { low: "bg-rate-low", mid: "bg-rate-mid", ok: "bg-rate-ok", high: "bg-rate-high" };
+export const RATING_TEXT: Record<RatingBand, string> = { low: "text-rate-low", mid: "text-rate-mid", ok: "text-rate-ok", high: "text-rate-high" };
 /** A piece without a rating. */
 export const UNRATED_STYLE = { backgroundImage: "repeating-linear-gradient(45deg, var(--line) 0 3px, transparent 3px 6px)" };
 

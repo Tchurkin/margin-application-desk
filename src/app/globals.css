@@ -27,8 +27,12 @@
   --rec-5: #8a6a0b;
   --rec-6: #4f7a1c;
   --rec-7: #5b6472;
-  /* A rating of 65 to 79 (the board's rating colors use danger, warn and add for the rest). */
-  --rate-ok: #4b6a8a;
+  /* Ratings (below 55, 55-64, 65-79, 80+): a plain red, orange, blue and green on every theme, never
+     tinted by it (src/components/board/ratings.tsx). */
+  --rate-low: #c8352a;
+  --rate-mid: #e07b10;
+  --rate-ok: #2f6fb8;
+  --rate-high: #23894a;
 }
 
 /* Dark by the device's setting, when no theme is chosen (Settings > Appearance). */
@@ -58,7 +62,10 @@
     --rec-5: #e0c065;
     --rec-6: #a7d67a;
     --rec-7: #aab3c0;
-    --rate-ok: #85a6c8;
+    --rate-low: #f2685c;
+    --rate-mid: #f5a53e;
+    --rate-ok: #6ba8ec;
+    --rate-high: #4fca86;
   }
 }
 
@@ -134,7 +141,10 @@
   --rec-5: #e0c065;
   --rec-6: #a7d67a;
   --rec-7: #aab3c0;
-  --rate-ok: #85a6c8;
+  --rate-low: #f2685c;
+  --rate-mid: #f5a53e;
+  --rate-ok: #6ba8ec;
+  --rate-high: #4fca86;
 }
 
 :root[data-theme="midnight"] {
@@ -173,6 +183,10 @@
   --danger-soft: #3a1310;
   --add: #6dffb0;
   --add-soft: #0f2e1e;
+  --rate-low: #ff6f61;
+  --rate-mid: #ffad33;
+  --rate-ok: #75b8ff;
+  --rate-high: #52e394;
 }
 
 @theme inline {
@@ -190,7 +204,10 @@
   --color-danger-soft: var(--danger-soft);
   --color-add: var(--add);
   --color-add-soft: var(--add-soft);
+  --color-rate-low: var(--rate-low);
+  --color-rate-mid: var(--rate-mid);
   --color-rate-ok: var(--rate-ok);
+  --color-rate-high: var(--rate-high);
   --font-sans: var(--font-geist-sans);
   --font-serif: var(--font-serif);
 }
