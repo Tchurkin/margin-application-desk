@@ -127,8 +127,7 @@ test("Rate this piece: one piece's rating and why, on its page, asked for from t
   await expect(panel).toContainText("rated by Claude");
   await expect(panel).toContainText("Clear, but any applicant could say it.");
   await expect(page.getByRole("button", { name: /^Rating 63/ })).toBeVisible();
-  await expect(panel.getByTestId("rating-answer")).toContainText("name one thing only this college has.");
-  await expect(panel.getByText("What Claude said")).toHaveCount(0);
+  await expect(panel.getByTestId("rating-reason")).toContainText("Clear, but any applicant could say it.");
   await expect(panel.getByRole("button", { name: "Rate this piece" })).toBeVisible();
 
   // Edited since: it says so once the text is saved.

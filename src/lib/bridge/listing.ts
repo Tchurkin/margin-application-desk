@@ -265,7 +265,9 @@ export const HOW_TO_RATE =
   "A rating is a percentile, 0 to 100: of the answers other applicants to this college write for this prompt, the share this piece is better than. " +
   "50 is a competent, true, typical answer; 70 has a specific detail and a real voice; 85 is memorable after a full stack of reading. " +
   "Judge it honestly against the prompt and the limit: be harsher on lists, résumé recaps, claims without evidence and closing one-liners, and on the same story told twice for one college; " +
-  "kinder to specific, true moments only this student could write. The reason is one sentence the student can act on.";
+  "kinder to specific, true moments only this student could write. " +
+  "The reason is the whole analysis, in two to four sentences the student can act on: what works (name it), what holds the piece back, and the one change that would raise it most. " +
+  "Give every piece that much, however many you rate.";
 
 function rateSteps(r: PendingRequest, o: ListingOptions): string[] {
   if (r.piece_id) {
@@ -275,7 +277,7 @@ function rateSteps(r: PendingRequest, o: ListingOptions): string[] {
       `Sent: ${sentAt(r.created_at)}`,
       `To do: rate this one piece, and only this one. ${pieceIncluded(r, o) ? "It is included below." : "Read it with read_piece."} ${HOW_TO_RATE} ` +
         "Save it with set_piece_ratings, even if it was rated before (the student asked for a fresh look). " +
-        closeWith(r, o, "the rating, and in two or three sentences what holds it back and what would raise it most"),
+        closeWith(r, o, 'one line, e.g. "Rated 63.": the reason saved with the rating is what the student reads beside the piece'),
     ];
   }
   const lines = [`Sent: ${sentAt(r.created_at)}`];

@@ -27,7 +27,6 @@ export interface PieceRatingState {
   rating: Rated | null;
   assistants: Assistant[];
   pending: DeskRequest | null;
-  last: DeskRequest | null;
   reload: () => void;
   setPending: (r: DeskRequest | null) => void;
 }
@@ -38,7 +37,6 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
     rating: null,
     assistants: [],
     pending: null,
-    last: null,
   });
   const [tick, setTick] = useState(0);
   const reload = useCallback(() => setTick((t) => t + 1), []);
@@ -56,9 +54,9 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
               .select(REQUEST_COLS)
               .eq("piece_id", pieceId)
               .eq("kind", "rate")
-              .in("status", ["pending", "answered"])
+              .eq("status", "pending")
               .order("created_at", { ascending: false })
-              .limit(3)
+              .limit(1)
           : none,
         owner ? supabase.from("connector_links").select("label").is("revoked_at", null) : none,
       ]);
@@ -72,7 +70,6 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
         rating: (piece.data as Rated | null) ?? null,
         assistants: (["claude", "chatgpt"] as const).filter((a) => labels.has(a)),
         pending: rows.find((r) => r.status === "pending") ?? null,
-        last: rows.find((r) => r.status === "answered") ?? null,
       });
     })();
     return () => {
@@ -163,7 +160,12 @@ export function PieceRatingPanel({ state, deskId, pieceId, owner }: { state: Pie
                 .
               </span>
             </p>
-            {r.rating_reason && <p className="mt-1">{r.rating_reason}</p>}
+            {/* The whole analysis, from Rate this piece or Rate my essays alike. */}
+            {r.rating_reason && (
+              <div className="mt-1" data-testid="rating-reason">
+                <AnswerText text={r.rating_reason} />
+              </div>
+            )}
             {r.rating_stale && (
               <p className="mt-1 text-xs text-warn" data-testid="rating-stale">
                 Edited since this rating.
@@ -175,11 +177,6 @@ export function PieceRatingPanel({ state, deskId, pieceId, owner }: { state: Pie
         <p className="text-muted">Not rated yet.</p>
       )}
 
-      {state.last?.answer && !state.pending && (
-        <div className="mt-2 border-t border-line pt-2" data-testid="rating-answer">
-          <AnswerText text={state.last.answer} />
-        </div>
-      )}
 
       {owner &&
         (state.assistants.length === 0 ? (

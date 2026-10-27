@@ -17,12 +17,12 @@ create table if not exists average_app.migrations (version text primary key, nam
 
 do $setup$
 declare
-  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names', '20261024000000_connector_comments', '20261025000000_piece_ratings', '20261026000000_rating_stale_column'];
+  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names', '20261024000000_connector_comments', '20261025000000_piece_ratings', '20261026000000_rating_stale_column', '20261027000000_rating_reason_longer'];
   marked text[];
   cli text[] := '{}';
   have boolean[];
   -- For each migration, the later ones that change some of the same things, and what.
-  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic","29":"function can_suggest_desk"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link","32":"function connector_piece"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics","27":"function connector_requests","28":"function connector_requests"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates","29":"function can_edit_text"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow","25":"function connector_counselor_poll","26":"function connector_counselor_poll","28":"function connector_counselor_poll","29":"function can_edit_text, function can_suggest_desk","33":"constraint desk_requests_kind_check"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check","25":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","26":"function connector_counselor_poll, function connector_counselor_removed, function connector_draft_answer and 1 more","28":"function connector_counselor_poll","33":"constraint desk_requests_kind_check"},"11":{"12":"function connector_counselor_poll","25":"function connector_counselor_poll","26":"function connector_counselor_poll, function connector_counselor_removed","28":"function connector_counselor_poll"},"12":{"25":"function connector_counselor_poll","26":"function connector_counselor_poll","27":"function connector_requests","28":"function connector_counselor_poll, function connector_requests"},"14":{"33":"constraint desk_requests_kind_check"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"},"25":{"26":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","27":"function connector_counselor_requests","28":"function connector_counselor_poll, function connector_counselor_requests"},"26":{"28":"function connector_counselor_poll"},"27":{"28":"function ask_on_shared_desk, function connector_counselor_requests, function connector_requests and 2 more"},"33":{"34":"column pieces.rating_stale"}}';
+  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic","29":"function can_suggest_desk"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link","32":"function connector_piece"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics","27":"function connector_requests","28":"function connector_requests"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates","29":"function can_edit_text"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow","25":"function connector_counselor_poll","26":"function connector_counselor_poll","28":"function connector_counselor_poll","29":"function can_edit_text, function can_suggest_desk","33":"constraint desk_requests_kind_check"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check","25":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","26":"function connector_counselor_poll, function connector_counselor_removed, function connector_draft_answer and 1 more","28":"function connector_counselor_poll","33":"constraint desk_requests_kind_check"},"11":{"12":"function connector_counselor_poll","25":"function connector_counselor_poll","26":"function connector_counselor_poll, function connector_counselor_removed","28":"function connector_counselor_poll"},"12":{"25":"function connector_counselor_poll","26":"function connector_counselor_poll","27":"function connector_requests","28":"function connector_counselor_poll, function connector_requests"},"14":{"33":"constraint desk_requests_kind_check"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"},"25":{"26":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","27":"function connector_counselor_requests","28":"function connector_counselor_poll, function connector_counselor_requests"},"26":{"28":"function connector_counselor_poll"},"27":{"28":"function ask_on_shared_desk, function connector_counselor_requests, function connector_requests and 2 more"},"33":{"34":"column pieces.rating_stale","35":"function connector_set_piece_ratings"}}';
   late boolean[] := '{}';
   blocked text;
   applied int := 0;
@@ -65,7 +65,8 @@ begin
     ('20261023000000' = any(marked)) or ('20261023000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'piece_versions' and column_name = 'label')),
     ('20261024000000' = any(marked)) or ('20261024000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'connector_withdraw_suggestions')),
     ('20261025000000' = any(marked)) or ('20261025000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'connector_set_piece_ratings')),
-    ('20261026000000' = any(marked)) or ('20261026000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'pieces_rating_stale'))
+    ('20261026000000' = any(marked)) or ('20261026000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'pieces_rating_stale')),
+    ('20261027000000' = any(marked)) or ('20261027000000' = any(cli)) or (coalesce(position('2000' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'pieces_rating_reason_check' and c.conrelid = to_regclass('public.pieces')))) > 0, false))
   ];
 
   for i in 1 .. array_length(names, 1) loop
@@ -4456,6 +4457,47 @@ $m20261026000000$;
     insert into average_app.migrations (version, name) values ('20261026000000', '20261026000000_rating_stale_column');
     applied := applied + 1;
     raise notice 'Applied %', '20261026000000_rating_stale_column' || case when late[34] then ' (it had been skipped)' else '' end;
+  end if;
+
+  if not have[35] then
+    execute $m20261027000000$
+-- A rating's reason holds the whole analysis: what works, what holds the piece back and the one
+-- change that would raise it most, whether it came from Rate my essays or Rate this piece
+-- (Braxton's call, 10/26/26). Two to four sentences; up to 2000 characters.
+
+alter table public.pieces drop constraint if exists pieces_rating_reason_check;
+alter table public.pieces add constraint pieces_rating_reason_check check (length(rating_reason) <= 2000);
+
+create or replace function public.connector_set_piece_ratings(token text, ratings jsonb)
+returns integer language plpgsql security definer set search_path = public as $$
+declare
+  l public.connector_links := public.connector_link(token);
+  r jsonb;
+  pct integer;
+  n integer := 0;
+begin
+  if jsonb_typeof(ratings) <> 'array' or jsonb_array_length(ratings) = 0 or jsonb_array_length(ratings) > 300 then
+    raise exception 'Rate between 1 and 300 pieces at a time.';
+  end if;
+  for r in select * from jsonb_array_elements(ratings) loop
+    if jsonb_typeof(r -> 'percentile') <> 'number' or (r ->> 'percentile')::numeric not between 0 and 100 then
+      raise exception 'A percentile is a number from 0 to 100 (got %).', coalesce(r ->> 'percentile', 'nothing');
+    end if;
+    pct := round((r ->> 'percentile')::numeric);
+    update public.pieces
+       set rating = pct, rating_reason = left(coalesce(r ->> 'reason', ''), 2000), rated_at = now(),
+           rated_by = l.label, rated_text_md5 = md5(plain_text)
+     where id::text = r ->> 'piece_id' and desk_id = l.desk_id;
+    if not found then raise exception 'No piece with id % on this desk.', coalesce(r ->> 'piece_id', '(none)'); end if;
+    n := n + 1;
+  end loop;
+  return n;
+end;
+$$;
+$m20261027000000$;
+    insert into average_app.migrations (version, name) values ('20261027000000', '20261027000000_rating_reason_longer');
+    applied := applied + 1;
+    raise notice 'Applied %', '20261027000000_rating_reason_longer' || case when late[35] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

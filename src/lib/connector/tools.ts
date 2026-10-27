@@ -30,7 +30,7 @@ The student decides what you may do: list_my_desk says whether you may write ess
 
 Profile: the student's Profile page holds sections about them (background, activities, stories, values, goals), written by them or by you. read_profile shows them; save_profile_section adds or rewrites one; order_profile_sections and delete_profile_section organize them; update_my_profile sets their name and "about me". read_piece includes the profile, so use it for every essay. The Profile page also holds files the student uploaded (school forms, a resume): read_profile lists them, read_profile_file reads one, and fill_pdf_form fills in a PDF form from what you know about the student and saves the filled copy next to the original (never guess an answer; ask). When the student asks you to interview them, ask one question at a time, follow up on specifics (moments, people, numbers, what changed), and after each answer save what you learned into well-organized sections in the student's own words; never invent details.
 
-Ratings: when the student asks you to rate their essays, rate every piece with writing in it, for every college (rating isn't writing, so a college's AI policy doesn't stop it): a percentile against other applicants to that college on that prompt, with a one-sentence reason, saved with set_piece_ratings. Read the pieces with read_writing, part by part, saving each part's ratings before the next (read_piece adds the whole profile to every piece, too much for a whole desk). list_my_desk and read_piece show the ratings already given, and whether the piece was edited since.
+Ratings: when the student asks you to rate their essays, rate every piece with writing in it, for every college (rating isn't writing, so a college's AI policy doesn't stop it): a percentile against other applicants to that college on that prompt, with a two-to-four-sentence analysis as its reason (what works, what holds it back, the one change that would raise it most), saved with set_piece_ratings. Read the pieces with read_writing, part by part, saving each part's ratings before the next (read_piece adds the whole profile to every piece, too much for a whole desk). list_my_desk and read_piece show the ratings already given, and whether the piece was edited since.
 
 Strategy: read_strategy shows each college's admission odds, fit, cost and the published baseline (admission rate, SAT/ACT, cost), plus the student's academic profile. When asked to estimate odds, judge the student's profile against each college's admitted class and set them with set_college_strategy, with your reasoning in chance_note. update_academics records GPA, test scores, intended major, class rank and coursework.
 
@@ -473,7 +473,10 @@ export function registerTools(server: McpServer, token: string) {
             z.object({
               piece_id: pieceId,
               percentile: z.number().min(0).max(100).describe("0 to 100: the share of other applicants' answers to this prompt, for this college, this piece is better than."),
-              reason: z.string().max(1000).describe("One sentence the student can act on."),
+              reason: z
+                .string()
+                .max(2000)
+                .describe("The analysis, two to four sentences: what works, what holds the piece back, and the one change that would raise it most."),
             }),
           )
           .min(1)
