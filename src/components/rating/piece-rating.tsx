@@ -176,12 +176,9 @@ export function PieceRatingPanel({ state, deskId, pieceId, owner }: { state: Pie
       )}
 
       {state.last?.answer && !state.pending && (
-        <details className="mt-2 text-muted">
-          <summary className="cursor-pointer">What {state.last.answered_by || who} said</summary>
-          <div className="mt-1 text-ink">
-            <AnswerText text={state.last.answer} />
-          </div>
-        </details>
+        <div className="mt-2 border-t border-line pt-2" data-testid="rating-answer">
+          <AnswerText text={state.last.answer} />
+        </div>
       )}
 
       {owner &&
