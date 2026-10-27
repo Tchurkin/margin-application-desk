@@ -39,6 +39,7 @@ export function WriteWorkspace({
   title,
   countNow,
   waitingNow,
+  ratingNow,
   status,
   editor,
   history,
@@ -57,6 +58,8 @@ export function WriteWorkspace({
   countNow: string;
   /** The open piece's suggestions and comments as the editor has them right now. */
   waitingNow: Waiting | null;
+  /** The open piece's rating as its Rating panel last loaded it (null: none loaded yet). */
+  ratingNow: { rating?: number | null; rating_stale?: boolean } | null;
   status: PieceStatus;
   editor: Editor | null;
   history: ReactNode;
@@ -91,7 +94,7 @@ export function WriteWorkspace({
             currentId={pieceId}
             pieceHref={pieceHref}
             collegeHref={collegeHref}
-            live={{ count: countNow, status, waiting: waitingNow }}
+            live={{ count: countNow, status, waiting: waitingNow, rating: ratingNow }}
             waiting={waiting}
             people={people}
           />

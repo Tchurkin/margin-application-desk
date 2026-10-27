@@ -124,6 +124,8 @@ test("Rate this piece: one piece's rating and why, on its page, asked for from t
   expect((await call(client, "answer_request", { request_id: requestId, answer: "63: name one thing only this college has." })).isError).toBe(false);
 
   await expect(panel).toContainText("63rd percentile", { timeout: 15_000 });
+  // The Files list has it at once, without a reload.
+  await expect(page.getByRole("tree", { name: "Colleges and pieces" }).getByTestId("rail-rating")).toHaveText("63");
   await expect(panel).toContainText("rated by Claude");
   await expect(panel).toContainText("Clear, but any applicant could say it.");
   await expect(page.getByRole("button", { name: /^Rating 63/ })).toBeVisible();
@@ -142,5 +144,6 @@ test("Rate this piece: one piece's rating and why, on its page, asked for from t
   await page.keyboard.insertText(" Also the snow.");
   await waitSaved(page);
   await expect(panel.getByTestId("rating-stale")).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("tree", { name: "Colleges and pieces" }).getByTestId("rail-rating")).toHaveAttribute("title", "Rated 63, edited since");
   await client.close();
 });

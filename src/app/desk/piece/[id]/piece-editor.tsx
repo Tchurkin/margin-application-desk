@@ -690,6 +690,7 @@ export function PieceEditor({
       title={title}
       countNow={countLabel({ words: countWords(text), chars: countChars(text), kind: limitKind, limit: limitValue })}
       waitingNow={waitingNow}
+      ratingNow={rating.ready ? (rating.rating ?? { rating: null }) : null}
       status={pieceStatus}
       editor={editor}
       history={

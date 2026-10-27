@@ -101,7 +101,7 @@ export function CollegeRail({
   /** Where a college with no pieces yet opens (owners only). */
   collegeHref?: (id: string) => string;
   /** The open piece's count and status as the editor has them right now. */
-  live: { count: string; status: PieceStatus; waiting?: Waiting | null };
+  live: { count: string; status: PieceStatus; waiting?: Waiting | null; rating?: { rating?: number | null; rating_stale?: boolean } | null };
   /** Everyone else working on the desk, by the piece they have open. */
   people?: Map<string, Face[]>;
   /** Suggestions and comments waiting on each piece, as the page loaded. */
@@ -245,6 +245,8 @@ export function CollegeRail({
   const pieceRow = (p: RailPiece, g: RailGroup, level: 1 | 2) => {
     const here = p.id === currentId;
     const status = here ? live.status : p.status;
+    // The open piece's rating as its Rating panel has it: a new one shows here at once.
+    const rated = here && live.rating ? { ...p, rating: live.rating.rating, rating_stale: live.rating.rating_stale } : p;
     const count = here ? live.count : countLabel({ words: p.word_count, kind: p.limit_kind, limit: p.limit_value });
     const isVersion = !!p.variant_of && g.pieces.some((o) => o.id === p.variant_of);
     const indent = level === 1 ? (isVersion ? "pl-8" : "pl-3") : isVersion ? "pl-10" : "pl-7";
@@ -255,7 +257,7 @@ export function CollegeRail({
         key={p.id}
         role="treeitem"
         aria-level={level}
-        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}${waitingLabel(w)}${ratingPhrase(p, false).replace(" · ", ", ")}${on.length ? `, ${hereLabel(on)}` : ""}`}
+        aria-label={`${p.title}, ${labelOf(PIECE_STATUSES, status)}, ${count}${waitingLabel(w)}${ratingPhrase(rated, false).replace(" · ", ", ")}${on.length ? `, ${hereLabel(on)}` : ""}`}
         aria-current={here ? "page" : undefined}
         data-rail-key={p.id}
         tabIndex={focusable === p.id ? 0 : -1}
@@ -281,7 +283,7 @@ export function CollegeRail({
         <span className={`min-w-0 flex-1 truncate ${level === 1 ? "font-medium" : ""}`}>{p.title}</span>
         <WaitingBadges w={w} />
         <Faces people={on} />
-        <RatingChip piece={p} />
+        <RatingChip piece={rated} />
         <span className="shrink-0 font-mono text-xs text-muted">{count}</span>
       </li>
     );
