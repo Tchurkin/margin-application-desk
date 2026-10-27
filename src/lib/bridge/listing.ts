@@ -266,6 +266,10 @@ export const HOW_TO_RATE =
   "50 is a competent, true, typical answer; 70 has a specific detail and a real voice; 85 is memorable after a full stack of reading. " +
   "Judge it honestly against the prompt and the limit: be harsher on lists, résumé recaps, claims without evidence and closing one-liners, and on the same story or lesson told twice to one reader; " +
   "kinder to specific, true moments only this student could write. " +
+  "Writing that sounds AI-made lowers the rating, as it would with a reader who has seen thousands of such essays: " +
+  'stock phrases ("tapestry", "testament to", "delve", "navigate", "foster", "I learned that"), "not X, but Y" turns, tidy lists of three, ' +
+  "a line of wisdom closing every paragraph, even and polished rhythm with no rough edges, and words or abstractions a high school student wouldn't use. " +
+  "When a piece has these, quote the lines in the reason so the student can rewrite them in their own voice. " +
   "The reason is the whole analysis, in two to four sentences the student can act on: what works (name it), what holds the piece back, and the one change that would raise it most. " +
   "Give every piece that much, however many you rate. " +
   "Repetition counts only between pieces one admissions reader sees together: those in the same college's application (its own pieces, and a personal statement or other essay sent to every college on that application, like the Common App essay to a Common App college). " +
