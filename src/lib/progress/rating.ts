@@ -20,13 +20,15 @@ export interface Rated {
   rated_at?: string | null;
   /** Edited after it was rated. */
   rating_stale?: boolean;
-  word_count: number;
 }
 
-/** A rating's band, or null for a piece without one (or with nothing written: an old rating no longer says anything). */
+/**
+ * A rating's band, or null for a piece without one. (Not the word count: it is saved a moment
+ * after the text and can lag. A rated piece whose text was cleared since shows as stale.)
+ */
 export function ratingBand(p: Rated): RatingBand | null {
   const r = p.rating;
-  if (r == null || p.word_count === 0) return null;
+  if (r == null) return null;
   return r < 55 ? "low" : r < 65 ? "mid" : r < 80 ? "ok" : "high";
 }
 

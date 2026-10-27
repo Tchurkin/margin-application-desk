@@ -17,12 +17,12 @@ create table if not exists average_app.migrations (version text primary key, nam
 
 do $setup$
 declare
-  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names', '20261024000000_connector_comments', '20261025000000_piece_ratings'];
+  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names', '20261024000000_connector_comments', '20261025000000_piece_ratings', '20261026000000_rating_stale_column'];
   marked text[];
   cli text[] := '{}';
   have boolean[];
   -- For each migration, the later ones that change some of the same things, and what.
-  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic","29":"function can_suggest_desk"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link","32":"function connector_piece"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics","27":"function connector_requests","28":"function connector_requests"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates","29":"function can_edit_text"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow","25":"function connector_counselor_poll","26":"function connector_counselor_poll","28":"function connector_counselor_poll","29":"function can_edit_text, function can_suggest_desk","33":"constraint desk_requests_kind_check"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check","25":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","26":"function connector_counselor_poll, function connector_counselor_removed, function connector_draft_answer and 1 more","28":"function connector_counselor_poll","33":"constraint desk_requests_kind_check"},"11":{"12":"function connector_counselor_poll","25":"function connector_counselor_poll","26":"function connector_counselor_poll, function connector_counselor_removed","28":"function connector_counselor_poll"},"12":{"25":"function connector_counselor_poll","26":"function connector_counselor_poll","27":"function connector_requests","28":"function connector_counselor_poll, function connector_requests"},"14":{"33":"constraint desk_requests_kind_check"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"},"25":{"26":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","27":"function connector_counselor_requests","28":"function connector_counselor_poll, function connector_counselor_requests"},"26":{"28":"function connector_counselor_poll"},"27":{"28":"function ask_on_shared_desk, function connector_counselor_requests, function connector_requests and 2 more"}}';
+  clash jsonb := '{"1":{"2":"function can_read_desk, function can_write_desk, function handle_new_user and 1 more","8":"policy \"add updates\" on piece_updates","9":"policy \"add updates\" on piece_updates","17":"function handle_new_user"},"2":{"3":"function check_suggestion_update","8":"function check_suggestion_update","9":"function can_suggest_desk, function create_share_link","17":"function handle_new_user","18":"function join_desk, function link_info","24":"function can_use_piece_topic","29":"function can_suggest_desk"},"3":{"4":"function connector_add_suggestions","5":"function connector_add_suggestions, function connector_desk","8":"function check_suggestion_update","9":"function connector_add_suggestions, function connector_desk","15":"function connector_desk","20":"function connector_link","32":"function connector_piece"},"4":{"5":"function connector_add_suggestions","9":"function connector_add_suggestions, function connector_create_piece, function connector_write"},"5":{"9":"function connector_add_suggestions, function connector_delete_college, function connector_delete_piece and 4 more","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece"},"6":{"12":"function connector_requests","14":"function connector_strategy, function connector_update_academics","27":"function connector_requests","28":"function connector_requests"},"8":{"9":"function can_edit_text, policy \"add updates\" on piece_updates","29":"function can_edit_text"},"9":{"10":"constraint desk_requests_kind_check, function connector_counselor_poll","11":"function connector_counselor_poll","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check, function connector_profile","15":"function connector_desk","16":"function connector_delete_college, function connector_delete_piece","20":"function connector_allow","25":"function connector_counselor_poll","26":"function connector_counselor_poll","28":"function connector_counselor_poll","29":"function can_edit_text, function can_suggest_desk","33":"constraint desk_requests_kind_check"},"10":{"11":"column connector_links.counselor_remove, function connector_counselor_poll, function connector_counselor_removed","12":"function connector_counselor_poll","14":"constraint desk_requests_kind_check","25":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","26":"function connector_counselor_poll, function connector_counselor_removed, function connector_draft_answer and 1 more","28":"function connector_counselor_poll","33":"constraint desk_requests_kind_check"},"11":{"12":"function connector_counselor_poll","25":"function connector_counselor_poll","26":"function connector_counselor_poll, function connector_counselor_removed","28":"function connector_counselor_poll"},"12":{"25":"function connector_counselor_poll","26":"function connector_counselor_poll","27":"function connector_requests","28":"function connector_counselor_poll, function connector_requests"},"14":{"33":"constraint desk_requests_kind_check"},"17":{"19":"trigger forget_unconfirmed_password"},"21":{"22":"function join_desk_by_name, function set_desk_sharing"},"25":{"26":"function connector_counselor_poll, function connector_draft_answer, function connector_finish_request","27":"function connector_counselor_requests","28":"function connector_counselor_poll, function connector_counselor_requests"},"26":{"28":"function connector_counselor_poll"},"27":{"28":"function ask_on_shared_desk, function connector_counselor_requests, function connector_requests and 2 more"},"33":{"34":"column pieces.rating_stale"}}';
   late boolean[] := '{}';
   blocked text;
   applied int := 0;
@@ -64,7 +64,8 @@ begin
     ('20261022000000' = any(marked)) or ('20261022000000' = any(cli)) or (coalesce(position('comment' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'suggestions_kind_check' and c.conrelid = to_regclass('public.suggestions')))) > 0, false)),
     ('20261023000000' = any(marked)) or ('20261023000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'piece_versions' and column_name = 'label')),
     ('20261024000000' = any(marked)) or ('20261024000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'connector_withdraw_suggestions')),
-    ('20261025000000' = any(marked)) or ('20261025000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'connector_set_piece_ratings'))
+    ('20261025000000' = any(marked)) or ('20261025000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'connector_set_piece_ratings')),
+    ('20261026000000' = any(marked)) or ('20261026000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'pieces_rating_stale'))
   ];
 
   for i in 1 .. array_length(names, 1) loop
@@ -4418,6 +4419,43 @@ $m20261025000000$;
     insert into average_app.migrations (version, name) values ('20261025000000', '20261025000000_piece_ratings');
     applied := applied + 1;
     raise notice 'Applied %', '20261025000000_piece_ratings' || case when late[33] then ' (it had been skipped)' else '' end;
+  end if;
+
+  if not have[34] then
+    execute $m20261026000000$
+-- A rating's "edited since" flag as a plain column, kept by a trigger.
+--
+-- Migration 20261025 made pieces.rating_stale a generated column. The Trash puts a piece back by
+-- inserting its whole saved row, and Postgres refuses any value for a generated column, so no
+-- deleted piece could be restored. The flag is now an ordinary column the trigger below sets
+-- whenever the text or the rating changes, and on every insert (a restored piece included).
+
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'pieces' and column_name = 'rating_stale' and is_generated = 'ALWAYS') then
+    alter table public.pieces alter column rating_stale drop expression;
+  end if;
+end;
+$$;
+update public.pieces set rating_stale = false where rating_stale is null;
+alter table public.pieces alter column rating_stale set default false;
+alter table public.pieces alter column rating_stale set not null;
+
+create or replace function public.pieces_rating_stale()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  new.rating_stale := new.rating is not null and new.rated_text_md5 is distinct from md5(new.plain_text);
+  return new;
+end;
+$$;
+drop trigger if exists pieces_rating_stale on public.pieces;
+create trigger pieces_rating_stale before insert or update of plain_text, rating, rated_text_md5 on public.pieces
+  for each row execute function public.pieces_rating_stale();
+$m20261026000000$;
+    insert into average_app.migrations (version, name) values ('20261026000000', '20261026000000_rating_stale_column');
+    applied := applied + 1;
+    raise notice 'Applied %', '20261026000000_rating_stale_column' || case when late[34] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

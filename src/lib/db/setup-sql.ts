@@ -52,6 +52,7 @@ export const PROBES: Record<string, string> = {
   "20261023000000": col("piece_versions", "label"),
   "20261024000000": fn("connector_withdraw_suggestions"),
   "20261025000000": fn("connector_set_piece_ratings"),
+  "20261026000000": fn("pieces_rating_stale"),
 };
 
 /**

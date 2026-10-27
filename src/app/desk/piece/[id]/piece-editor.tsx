@@ -829,7 +829,15 @@ function EssayEditor({
       snapshot(false);
     };
     const unsubscribe = sync.addSavedListener(() => void onSaved());
+    // A reload or a closed tab doesn't unmount: send the counts now rather than lose them.
+    const onHide = () => {
+      if (!derivedTimer) return;
+      clearTimeout(derivedTimer);
+      saveDerived();
+    };
+    window.addEventListener("pagehide", onHide);
     return () => {
+      window.removeEventListener("pagehide", onHide);
       unsubscribe();
       if (derivedTimer) {
         clearTimeout(derivedTimer);
