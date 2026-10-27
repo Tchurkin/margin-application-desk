@@ -107,7 +107,8 @@ class Context {
       odds: async () => ({ key: "strategy", text: await this.strategyText() }),
       interview: async () => ({ key: "profile", text: await this.profileText() }),
       transcript: async () => ({ key: "profile", text: await this.profileText() }),
-      rate: async () => ({ key: "overview", text: await this.deskText() }),
+      rate: async () =>
+        r.piece_id ? { key: `piece:${r.piece_id}`, text: await this.piece(r.piece_id) } : { key: "overview", text: await this.deskText() },
       chat: async () => ({
         key: "overview",
         text: [await this.profileText(), await this.deskText()].filter(Boolean).join("\n\n") || null,

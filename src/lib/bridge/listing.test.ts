@@ -95,6 +95,15 @@ describe("renderRequestList", () => {
     expect(t).toContain("answer_request with request_id rt1");
   });
 
+  it("asks for a rating of just one piece when it comes from the piece", () => {
+    const t = renderRequestList([row("rt2", { kind: "rate", prompt: "Rate this piece." })]);
+    expect(t).toContain(`[piece_id: ${PIECE}]`);
+    expect(t).toContain("rate this one piece, and only this one");
+    expect(t).toContain("Read it with read_piece.");
+    expect(t).not.toContain("read_writing");
+    expect(t).toContain("answer_request with request_id rt2");
+  });
+
   it("hands a pasted transcript over whole, to be read into the academics without guessing", () => {
     const transcript = "Grade 9: Honors English A, Algebra II A-\nGrade 10: AP World History B+\nCumulative GPA 3.87 unweighted, 4.21 weighted";
     const tr = row("t1", { kind: "transcript", piece_id: null, piece_title: null, prompt: transcript });

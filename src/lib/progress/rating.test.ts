@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { ratingBand, ratingPhrase } from "./rating";
+import { ordinal, ratingBand, ratingPhrase } from "./rating";
 
 describe("ratings on the board", () => {
   it("bands: below 55, 55–64, 65–79, 80 and up", () => {
     const band = (rating: number) => ratingBand({ rating });
     expect([0, 54, 55, 64, 65, 79, 80, 100].map(band)).toEqual(["low", "low", "mid", "mid", "ok", "ok", "high", "high"]);
+  });
+
+  it("percentiles read as ordinals", () => {
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 63, 72, 100].map(ordinal)).toEqual(["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "63rd", "72nd", "100th"]);
   });
 
   it("no band without a rating", () => {

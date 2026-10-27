@@ -98,3 +98,44 @@ test("Rate my essays: ratings color the board, every college's pieces, faded onc
   await expect(page.getByRole("radio", { name: "Stage" })).toHaveAttribute("aria-checked", "true");
   await client.close();
 });
+
+test("Rate this piece: one piece's rating and why, on its page, asked for from there", async ({ page }) => {
+  await signUp(page, "rateone");
+  await addCollege(page, "Testy State", { deadline: "2030-11-01" });
+  const id = await addPiece(page, "Why Testy State", 250);
+  await essay(page).click();
+  await page.keyboard.insertText("I want to study rockets near the mountains.");
+  await waitSaved(page);
+  const client = await connect(page);
+  await page.goto(`/desk/piece/${id}`);
+
+  await page.getByRole("button", { name: /^Rating/ }).click();
+  const panel = page.getByTestId("piece-rating");
+  await expect(panel).toContainText("Not rated yet.");
+  await panel.getByRole("button", { name: "Rate this piece" }).click();
+  await expect(panel.getByRole("status")).toContainText("Waiting for Claude to rate this piece");
+
+  // Only this piece is asked for.
+  const listed = await call(client, "list_desk_requests");
+  expect(listed.text).toContain(`[piece_id: ${id}]`);
+  expect(listed.text).toContain("rate this one piece, and only this one");
+  const requestId = listed.text.match(/request_id: ([0-9a-f-]{36})\] \(kind: rate\)/)![1];
+  expect((await call(client, "set_piece_ratings", { ratings: [{ piece_id: id, percentile: 63, reason: "Clear, but any applicant could say it." }] })).isError).toBe(false);
+  expect((await call(client, "answer_request", { request_id: requestId, answer: "63: name one thing only this college has." })).isError).toBe(false);
+
+  await expect(panel).toContainText("63rd percentile", { timeout: 15_000 });
+  await expect(panel).toContainText("rated by Claude");
+  await expect(panel).toContainText("Clear, but any applicant could say it.");
+  await expect(page.getByRole("button", { name: /^Rating 63/ })).toBeVisible();
+  await panel.getByText("What Claude said").click();
+  await expect(panel).toContainText("name one thing only this college has.");
+  await expect(panel.getByRole("button", { name: "Rate this piece" })).toBeVisible();
+
+  // Edited since: it says so once the text is saved.
+  await essay(page).click();
+  await page.keyboard.press("Control+End");
+  await page.keyboard.insertText(" Also the snow.");
+  await waitSaved(page);
+  await expect(panel.getByTestId("rating-stale")).toBeVisible({ timeout: 15_000 });
+  await client.close();
+});

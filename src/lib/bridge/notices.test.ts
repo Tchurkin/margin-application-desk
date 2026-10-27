@@ -15,6 +15,8 @@ describe("answer notices", () => {
     expect(noticeFor(r("odds"), "/desk")).toMatchObject({ tab: "Strategy", text: "Claude estimated your odds." });
     expect(noticeFor(r("transcript"), "/desk")).toMatchObject({ tab: "Profile", href: "/desk/profile#academics" });
     expect(noticeFor(r("rate"), "/desk/write")).toEqual({ id: "r1", tab: "Board", href: "/desk", text: "Claude rated your essays." });
+    expect(noticeFor(r("rate", "p1"), "/desk", "Why us?")).toEqual({ id: "r1", tab: "Write", href: "/desk/piece/p1", text: "Claude rated “Why us?”." });
+    expect(noticeFor(r("rate", "p1"), "/desk/piece/p1", "Why us?")).toBeNull();
     expect(noticeFor(r("ask", "p1"), "/desk", "Why us?")).toMatchObject({
       tab: "Write",
       href: "/desk/piece/p1",

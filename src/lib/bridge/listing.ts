@@ -268,6 +268,16 @@ export const HOW_TO_RATE =
   "kinder to specific, true moments only this student could write. The reason is one sentence the student can act on.";
 
 function rateSteps(r: PendingRequest, o: ListingOptions): string[] {
+  if (r.piece_id) {
+    // "Rate this piece", from the piece's own page.
+    return [
+      pieceLine(r),
+      `Sent: ${sentAt(r.created_at)}`,
+      `To do: rate this one piece, and only this one. ${pieceIncluded(r, o) ? "It is included below." : "Read it with read_piece."} ${HOW_TO_RATE} ` +
+        "Save it with set_piece_ratings, even if it was rated before (the student asked for a fresh look). " +
+        closeWith(r, o, "the rating, and in two or three sentences what holds it back and what would raise it most"),
+    ];
+  }
   const lines = [`Sent: ${sentAt(r.created_at)}`];
   if (r.prompt.trim()) lines.push(`What the student said: ${cut(r.prompt.trim(), PROMPT_MAX, "note cut")}`);
   lines.push(

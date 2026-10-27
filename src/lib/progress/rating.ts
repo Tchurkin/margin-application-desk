@@ -41,3 +41,10 @@ export function ratingPhrase(p: Rated, withReason: boolean): string {
 }
 
 export type ColorBy = "stage" | "rating";
+
+/** 1st, 2nd, 3rd, 11th, 22nd, 72nd. */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? "th" : (["th", "st", "nd", "rd"][n % 10] ?? "th");
+  return `${n}${suffix}`;
+}

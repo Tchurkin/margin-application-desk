@@ -21,6 +21,7 @@ export default async function BoardPage() {
       .select(REQUEST_COLS)
       .eq("desk_id", desk.id)
       .eq("kind", "rate")
+      .is("piece_id", null)
       .in("status", ["pending", "answered"])
       .order("created_at", { ascending: false })
       .limit(5),

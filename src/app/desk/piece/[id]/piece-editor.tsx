@@ -7,6 +7,7 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
+import { PieceRatingPanel, ratingLabel, TEXT_SAVED, usePieceRating } from "@/components/rating/piece-rating";
 import { yUndoPluginKey } from "@tiptap/y-tiptap";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AnswerText, InlineText } from "@/components/ask/answer-text";
@@ -195,7 +196,8 @@ export function PieceEditor({
   // The suggestions margin, folded away or not (per browser).
   const marginFolded = usePref(PREF.marginFolded) === "1";
   // Prompt and Notes open above the writing; the prompt starts open when there is one.
-  const [panels, setPanels] = useState({ prompt: !!piece.prompt, notes: false });
+  const [panels, setPanels] = useState({ prompt: !!piece.prompt, notes: false, rating: false });
+  const rating = usePieceRating(piece.id, owner);
   const togglePanel = (k: keyof typeof panels) => setPanels((p) => ({ ...p, [k]: !p[k] }));
   /** A fold-out: its button, with what it opens right below it. */
   const fold = (key: keyof typeof panels, label: string, filled: boolean, content: ReactNode) => (
@@ -572,6 +574,8 @@ export function PieceEditor({
               <div className="rounded-md border border-line bg-panel px-3 py-2">{notes ? <AnswerText text={notes} /> : <p className="text-sm">No notes.</p>}</div>
             ),
           )}
+          {rating.ready &&
+            fold("rating", ratingLabel(rating), false, <PieceRatingPanel state={rating} deskId={deskId ?? ""} pieceId={piece.id} owner={owner} />)}
         </div>
         {canWrite && (
           <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -790,6 +794,8 @@ function EssayEditor({
         .rpc("set_piece_text_stats", { piece: pieceId, plain: t, words: stats.word_count, chars: stats.char_count })
         .then(({ error }) => {
           if (error && isDeskOwner) supabase.from("pieces").update(stats).eq("id", pieceId).then(() => {});
+          // The saved text moved on: a rating of the old one is now stale.
+          else window.dispatchEvent(new CustomEvent(TEXT_SAVED, { detail: pieceId }));
         });
     };
     const snapshot = (force: boolean) => {

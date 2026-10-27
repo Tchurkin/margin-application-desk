@@ -47,8 +47,11 @@ export function noticeFor(
               `${who} answered ${r.asked_by?.trim() ? `${r.asked_by.trim()}'s` : "your"} question${what}.`,
       };
     }
-    case "rate":
-      return path === "/desk" ? null : { id: r.id, tab: "Board", href: "/desk", text: `${who} rated your essays.` };
+    case "rate": {
+      if (!r.piece_id) return path === "/desk" ? null : { id: r.id, tab: "Board", href: "/desk", text: `${who} rated your essays.` };
+      const href = `/desk/piece/${r.piece_id}`;
+      return on(href) ? null : { id: r.id, tab: "Write", href, text: `${who} rated ${pieceTitle ? quote(pieceTitle) : "your piece"}.` };
+    }
     case "odds":
       return on("/desk/strategy") ? null : { id: r.id, tab: "Strategy", href: "/desk/strategy", text: `${who} estimated your odds.` };
     case "transcript":
