@@ -264,10 +264,12 @@ function transcriptSteps(r: PendingRequest, o: ListingOptions): string[] {
 export const HOW_TO_RATE =
   "A rating is a percentile, 0 to 100: of the answers other applicants to this college write for this prompt, the share this piece is better than. " +
   "50 is a competent, true, typical answer; 70 has a specific detail and a real voice; 85 is memorable after a full stack of reading. " +
-  "Judge it honestly against the prompt and the limit: be harsher on lists, résumé recaps, claims without evidence and closing one-liners, and on the same story told twice for one college; " +
+  "Judge it honestly against the prompt and the limit: be harsher on lists, résumé recaps, claims without evidence and closing one-liners, and on the same story or lesson told twice to one reader; " +
   "kinder to specific, true moments only this student could write. " +
   "The reason is the whole analysis, in two to four sentences the student can act on: what works (name it), what holds the piece back, and the one change that would raise it most. " +
-  "Give every piece that much, however many you rate.";
+  "Give every piece that much, however many you rate. " +
+  "Repetition counts only between pieces one admissions reader sees together: those in the same college's application (its own pieces, and a personal statement or other essay sent to every college on that application, like the Common App essay to a Common App college). " +
+  "The same story or lesson in essays for different colleges is fine and expected, since no reader sees both: never lower a rating for it, and don't mention it.";
 
 function rateSteps(r: PendingRequest, o: ListingOptions): string[] {
   if (r.piece_id) {

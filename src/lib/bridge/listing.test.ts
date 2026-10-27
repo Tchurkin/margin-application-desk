@@ -92,6 +92,8 @@ describe("renderRequestList", () => {
     expect(t).toContain("set_piece_ratings");
     expect(t).toContain("read_writing");
     expect(t).toContain("percentile, 0 to 100");
+    expect(t).toContain("Repetition counts only between pieces one admissions reader sees together");
+    expect(t).toContain("essays for different colleges is fine and expected");
     expect(t).toContain("answer_request with request_id rt1");
   });
 
