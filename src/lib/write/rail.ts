@@ -28,6 +28,7 @@ export interface RailPiece {
   /** The counselor's rating (migration 20261025). */
   rating?: number | null;
   rating_stale?: boolean;
+  rating_ai?: string;
 }
 
 export interface RailGroup {

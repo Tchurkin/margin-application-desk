@@ -107,6 +107,8 @@ export interface PieceRating {
   rated_by: string;
   /** The piece was edited after it was rated. */
   stale: boolean;
+  /** What sounds AI-written, if anything (migration 20261028). */
+  sounds_ai?: string;
 }
 
 /** The desk's ratings by piece; none before migration 20261025. */
@@ -161,7 +163,7 @@ async function loadWriting(sb: SupabaseClient, token: string): Promise<WritingGr
           limit_kind: x.limit_kind,
           limit_value: x.limit_value,
           text: texts.get(x.id) ?? "",
-          rating: x.rating ? { rating: x.rating.rating, stale: x.rating.stale } : null,
+          rating: x.rating ? { rating: x.rating.rating, stale: x.rating.stale, ai: !!x.rating.sounds_ai } : null,
         })),
       };
     }),
@@ -170,7 +172,7 @@ async function loadWriting(sb: SupabaseClient, token: string): Promise<WritingGr
 
 /** "rated 72 by Claude on 2026-10-26 (edited since)". */
 export function ratingPhrase(r: PieceRating): string {
-  return `rated ${r.rating}${r.rated_by ? ` by ${r.rated_by}` : ""}${r.rated_at ? ` on ${r.rated_at.slice(0, 10)}` : ""}${r.stale ? " (edited since)" : ""}`;
+  return `rated ${r.rating}${r.rated_by ? ` by ${r.rated_by}` : ""}${r.rated_at ? ` on ${r.rated_at.slice(0, 10)}` : ""}${r.stale ? " (edited since)" : ""}${r.sounds_ai ? ", flagged as sounding AI-written" : ""}`;
 }
 
 const LETTER_WORDS = { planned: "not asked yet", requested: "asked", submitted: "submitted" } as const;
@@ -283,7 +285,10 @@ export function renderPiece(p: PieceInfo, body: string): string {
     "## The current text (paragraphs are separated by single line breaks)",
     body || "(empty: nothing written yet)",
   );
-  if (p.rating) lines.push("", "## Rating", `${capital(ratingPhrase(p.rating))}${p.rating.reason ? `: ${p.rating.reason}` : ""}`);
+  if (p.rating) {
+    lines.push("", "## Rating", `${capital(ratingPhrase(p.rating))}${p.rating.reason ? `: ${p.rating.reason}` : ""}`);
+    if (p.rating.sounds_ai) lines.push(`Sounds AI-written: ${p.rating.sounds_ai}`);
+  }
   if (p.notes) lines.push("", "## Notes from the student and the people they share with (not part of the essay)", p.notes);
   if (p.college?.research) lines.push("", `## The student's research on ${p.college.name}`, p.college.research);
   if (p.student?.about) lines.push("", "## About the student (in their words)", p.student.about);
@@ -477,6 +482,11 @@ export function registerTools(server: McpServer, token: string) {
                 .string()
                 .max(2000)
                 .describe("The analysis, two to four sentences: what works, what holds the piece back, and the one change that would raise it most."),
+              sounds_ai: z
+                .string()
+                .max(2000)
+                .optional()
+                .describe("If any of it sounds AI-generated: each line quoted, its tell, and how to say it in the student's own words. Empty or left out when nothing does."),
             }),
           )
           .min(1)

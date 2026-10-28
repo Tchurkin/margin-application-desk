@@ -16,6 +16,8 @@ import { supabaseBrowser } from "@/lib/supabase/client";
  */
 
 const RATING_COLS = "rating, rating_reason, rated_by, rated_at, rating_stale";
+/** Added by migration 20261028. */
+const RATING_AI_COL = ", rating_ai";
 /** The editor saved a piece's text (its detail is the piece's id), which can make its rating stale. */
 export const TEXT_SAVED = "desk:piece-text-saved";
 const POLL_MS = 4000;
@@ -47,7 +49,11 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
     void (async () => {
       const none = Promise.resolve({ data: null, error: null });
       const [piece, reqs, links] = await Promise.all([
-        supabase.from("pieces").select(RATING_COLS).eq("id", pieceId).maybeSingle(),
+        // With the AI note, or without it on a database before migration 20261028.
+        (async (): Promise<{ data: unknown; error: unknown }> => {
+          const withAi = await supabase.from("pieces").select(RATING_COLS + RATING_AI_COL).eq("id", pieceId).maybeSingle();
+          return withAi.error ? await supabase.from("pieces").select(RATING_COLS).eq("id", pieceId).maybeSingle() : withAi;
+        })(),
         owner
           ? supabase
               .from("desk_requests")
@@ -164,6 +170,14 @@ export function PieceRatingPanel({ state, deskId, pieceId, owner }: { state: Pie
             {r.rating_reason && (
               <div className="mt-1" data-testid="rating-reason">
                 <AnswerText text={r.rating_reason} />
+              </div>
+            )}
+            {r.rating_ai && (
+              <div role="note" className="mt-2 rounded-md border border-danger bg-danger-soft px-2.5 py-1.5" data-testid="rating-ai">
+                <p className="font-medium text-danger">Sounds AI-written</p>
+                <div className="mt-0.5 text-ink">
+                  <AnswerText text={r.rating_ai} />
+                </div>
               </div>
             )}
             {r.rating_stale && (

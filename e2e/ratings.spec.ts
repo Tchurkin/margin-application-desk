@@ -120,13 +120,30 @@ test("Rate this piece: one piece's rating and why, on its page, asked for from t
   expect(listed.text).toContain(`[piece_id: ${id}]`);
   expect(listed.text).toContain("rate this one piece, and only this one");
   const requestId = listed.text.match(/request_id: ([0-9a-f-]{36})\] \(kind: rate\)/)![1];
-  expect((await call(client, "set_piece_ratings", { ratings: [{ piece_id: id, percentile: 63, reason: "Clear, but any applicant could say it." }] })).isError).toBe(false);
+  expect(
+    (
+      await call(client, "set_piece_ratings", {
+        ratings: [
+          {
+            piece_id: id,
+            percentile: 63,
+            reason: "Clear, but any applicant could say it.",
+            sounds_ai: "“rockets near the mountains” reads like a stock line: say which rockets, which mountains.",
+          },
+        ],
+      })
+    ).isError,
+  ).toBe(false);
   expect((await call(client, "answer_request", { request_id: requestId, answer: "63: name one thing only this college has." })).isError).toBe(false);
 
   await expect(panel).toContainText("63rd percentile", { timeout: 15_000 });
   // The Files list has it at once, without a reload.
   await expect(page.getByRole("tree", { name: "Colleges and pieces" }).getByTestId("rail-rating")).toHaveText("63");
   await expect(panel).toContainText("rated by Claude");
+  // What sounds AI-written gets its own warning, quoted lines and all.
+  await expect(panel.getByTestId("rating-ai")).toContainText("Sounds AI-written");
+  await expect(panel.getByTestId("rating-ai")).toContainText("“rockets near the mountains” reads like a stock line");
+  expect((await call(client, "read_piece", { piece_id: id })).text).toContain("Sounds AI-written: “rockets near the mountains”");
   await expect(panel).toContainText("Clear, but any applicant could say it.");
   await expect(page.getByRole("button", { name: /^Rating 63/ })).toBeVisible();
   await expect(panel.getByTestId("rating-reason")).toContainText("Clear, but any applicant could say it.");
@@ -135,7 +152,8 @@ test("Rate this piece: one piece's rating and why, on its page, asked for from t
   await page.reload();
   const rail = page.getByRole("tree", { name: "Colleges and pieces" });
   await expect(rail.getByTestId("rail-rating")).toHaveText("63");
-  await expect(rail.getByRole("treeitem", { name: /^Why Testy State,.*rated 63/ })).toBeVisible();
+  await expect(rail.getByRole("treeitem", { name: /^Why Testy State,.*rated 63, sounds AI-written/ })).toBeVisible();
+  await expect(rail.getByTestId("ai-tag")).toBeVisible();
   await page.getByRole("button", { name: /^Rating/ }).click();
 
   // Edited since: it says so once the text is saved.

@@ -21,5 +21,6 @@ describe("ratings on the board", () => {
     expect(ratingPhrase(p, false)).toBe(" · rated 72");
     expect(ratingPhrase({ ...p, rating_stale: true }, true)).toBe(" · rated 72, edited since: Specific and warm.");
     expect(ratingPhrase({}, true)).toBe("");
+    expect(ratingPhrase({ ...p, rating_ai: "“A tapestry of…”: stock phrase." }, false)).toBe(" · rated 72, sounds AI-written");
   });
 });

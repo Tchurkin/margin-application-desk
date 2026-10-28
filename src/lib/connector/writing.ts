@@ -15,7 +15,7 @@ export interface WritingPiece {
   limit_kind: "words" | "chars" | "none";
   limit_value: number | null;
   text: string;
-  rating?: { rating: number; stale: boolean } | null;
+  rating?: { rating: number; stale: boolean; ai?: boolean } | null;
 }
 
 export interface WritingGroup {
@@ -47,7 +47,9 @@ function groupBlock(g: WritingGroup, skipRated: boolean): string {
   }
   const lines = [head];
   for (const p of g.pieces) {
-    const rated = p.rating ? `, rated ${p.rating.rating}${p.rating.stale ? " (edited since)" : ""}` : ", not rated";
+    const rated = p.rating
+      ? `, rated ${p.rating.rating}${p.rating.stale ? " (edited since)" : ""}${p.rating.ai ? ", flagged as sounding AI-written" : ""}`
+      : ", not rated";
     if (!written(p)) {
       lines.push("", `### ${p.title} [piece_id: ${p.id}] empty: nothing to rate`);
       continue;

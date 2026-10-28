@@ -94,8 +94,10 @@ describe("renderRequestList", () => {
     expect(t).toContain("percentile, 0 to 100");
     expect(t).toContain("Repetition counts only between pieces one admissions reader sees together");
     expect(t).toContain("essays for different colleges is fine and expected");
-    expect(t).toContain("Writing that sounds AI-made lowers the rating");
-    expect(t).toContain("quote the lines in the reason");
+    expect(t).toContain("Check every piece for writing that sounds AI-generated, and be strict");
+    expect(t).toContain("say so in sounds_ai: quote each line, name its tell");
+    expect(t).toContain("rates 45 or lower");
+    expect(t).toContain("how the student writes elsewhere on the desk");
     expect(t).toContain("answer_request with request_id rt1");
   });
 

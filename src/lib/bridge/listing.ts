@@ -266,10 +266,16 @@ export const HOW_TO_RATE =
   "50 is a competent, true, typical answer; 70 has a specific detail and a real voice; 85 is memorable after a full stack of reading. " +
   "Judge it honestly against the prompt and the limit: be harsher on lists, résumé recaps, claims without evidence and closing one-liners, and on the same story or lesson told twice to one reader; " +
   "kinder to specific, true moments only this student could write. " +
-  "Writing that sounds AI-made lowers the rating, as it would with a reader who has seen thousands of such essays: " +
-  'stock phrases ("tapestry", "testament to", "delve", "navigate", "foster", "I learned that"), "not X, but Y" turns, tidy lists of three, ' +
-  "a line of wisdom closing every paragraph, even and polished rhythm with no rough edges, and words or abstractions a high school student wouldn't use. " +
-  "When a piece has these, quote the lines in the reason so the student can rewrite them in their own voice. " +
+  "Check every piece for writing that sounds AI-generated, and be strict: readers have seen thousands of AI-written essays, many run detectors, and one that sounds machine-made can sink an application. " +
+  "The tells: stock words and phrases (tapestry, testament to, delve, navigate, foster, journey, resonate, profound, pivotal, multifaceted, realm, underscore, " +
+  'ignite a passion, "I learned that", "This experience taught me", "little did I know"); "not just X, but Y" and "it wasn\'t about X, it was about Y" turns; ' +
+  "tidy lists of three and paired parallel sentences; a line of wisdom or a quotable aphorism closing every paragraph; every sentence about the same length, with no fragments, asides or humor; " +
+  "dashes and colons used for effect again and again; vague sensory set pieces (the hum of, the weight of) where a concrete detail should be; " +
+  "abstractions and big claims about the self (passion, resilience, growth) with no scene behind them; and words a high school student wouldn't use. " +
+  "Compare it with how the student writes elsewhere on the desk (their notes, their profile in their own words, their rougher pieces): lines that don't sound like them are the surest tell. " +
+  "If you can tell that any of it sounds AI-made, say so in sounds_ai: quote each line, name its tell, and say how to put it in their own words. " +
+  "Score it accordingly: a piece that reads as AI-written overall rates 45 or lower however polished; a few AI-sounding lines cost at least 10 points. " +
+  "Leave sounds_ai empty when nothing does; plain, specific writing is not suspect for being clean. " +
   "The reason is the whole analysis, in two to four sentences the student can act on: what works (name it), what holds the piece back, and the one change that would raise it most. " +
   "Give every piece that much, however many you rate. " +
   "Repetition counts only between pieces one admissions reader sees together: those in the same college's application (its own pieces, and a personal statement or other essay sent to every college on that application, like the Common App essay to a Common App college). " +

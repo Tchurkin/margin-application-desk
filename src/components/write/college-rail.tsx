@@ -8,7 +8,7 @@ import { PREF } from "@/lib/write/layout";
 import { countLabel, groupMeta, pickCollegePiece, SHARED, type RailGroup, type RailPiece } from "@/lib/write/rail";
 import { WaitingBadges } from "@/components/waiting-badges";
 import { NO_WAITING as NONE, waitingLabel, type Waiting } from "@/lib/data/waiting";
-import { RATING_BG } from "@/components/board/ratings";
+import { AiTag, RATING_BG } from "@/components/board/ratings";
 import { ratingBand, ratingPhrase } from "@/lib/progress/rating";
 import { usePref, writePref } from "./hooks";
 import { ChevronIcon, FilesIcon } from "./icons";
@@ -101,7 +101,7 @@ export function CollegeRail({
   /** Where a college with no pieces yet opens (owners only). */
   collegeHref?: (id: string) => string;
   /** The open piece's count and status as the editor has them right now. */
-  live: { count: string; status: PieceStatus; waiting?: Waiting | null; rating?: { rating?: number | null; rating_stale?: boolean } | null };
+  live: { count: string; status: PieceStatus; waiting?: Waiting | null; rating?: { rating?: number | null; rating_stale?: boolean; rating_ai?: string } | null };
   /** Everyone else working on the desk, by the piece they have open. */
   people?: Map<string, Face[]>;
   /** Suggestions and comments waiting on each piece, as the page loaded. */
@@ -246,7 +246,7 @@ export function CollegeRail({
     const here = p.id === currentId;
     const status = here ? live.status : p.status;
     // The open piece's rating as its Rating panel has it: a new one shows here at once.
-    const rated = here && live.rating ? { ...p, rating: live.rating.rating, rating_stale: live.rating.rating_stale } : p;
+    const rated = here && live.rating ? { ...p, rating: live.rating.rating, rating_stale: live.rating.rating_stale, rating_ai: live.rating.rating_ai } : p;
     const count = here ? live.count : countLabel({ words: p.word_count, kind: p.limit_kind, limit: p.limit_value });
     const isVersion = !!p.variant_of && g.pieces.some((o) => o.id === p.variant_of);
     const indent = level === 1 ? (isVersion ? "pl-8" : "pl-3") : isVersion ? "pl-10" : "pl-7";
@@ -284,6 +284,7 @@ export function CollegeRail({
         <WaitingBadges w={w} />
         <Faces people={on} />
         <RatingChip piece={rated} />
+        {ratingBand(rated) && rated.rating_ai && <AiTag />}
         <span className="shrink-0 font-mono text-xs text-muted">{count}</span>
       </li>
     );

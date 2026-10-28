@@ -23,7 +23,7 @@ import {
 } from "@/lib/progress/lanes";
 import { stageIndex, stageLabel, STAGES } from "@/lib/progress/stages";
 import { LetterRow, type LetterActions } from "./letters";
-import { RATING_BG, RATING_TEXT, UNRATED_STYLE } from "./ratings";
+import { AiTag, RATING_BG, RATING_TEXT, UNRATED_STYLE } from "./ratings";
 
 /*
  * The master board: one swimlane per college, most urgent first, each with its application
@@ -328,6 +328,7 @@ function Card({
               {piece.rating}
             </span>
           )}
+          {byRating && band && piece.rating_ai && <AiTag />}
         </span>
         <WaitingBadges w={w} />
         {own && <DueTag date={own} today={ctx.today} />}

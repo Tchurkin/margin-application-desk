@@ -18,6 +18,20 @@ import { supabaseBrowser } from "@/lib/supabase/client";
 /** A card's left strip, a folded college's bar and a rating's number, by band. */
 export const RATING_BG: Record<RatingBand, string> = { low: "bg-rate-low", mid: "bg-rate-mid", ok: "bg-rate-ok", high: "bg-rate-high" };
 export const RATING_TEXT: Record<RatingBand, string> = { low: "text-rate-low", mid: "text-rate-mid", ok: "text-rate-ok", high: "text-rate-high" };
+/** A rated piece the counselor found sounds AI-written. */
+export function AiTag() {
+  return (
+    <span
+      aria-hidden
+      title="Sounds AI-written: see its Rating"
+      data-testid="ai-tag"
+      className="ml-1 rounded border border-danger px-1 font-mono text-[10px] leading-4 font-semibold text-danger"
+    >
+      AI
+    </span>
+  );
+}
+
 /** A piece without a rating. */
 export const UNRATED_STYLE = { backgroundImage: "repeating-linear-gradient(45deg, var(--line) 0 3px, transparent 3px 6px)" };
 

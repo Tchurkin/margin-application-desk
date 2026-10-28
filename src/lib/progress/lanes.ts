@@ -39,6 +39,7 @@ export interface ProgressPiece {
   rated_by?: string;
   rated_at?: string | null;
   rating_stale?: boolean;
+  rating_ai?: string;
 }
 
 export interface Lane {
@@ -225,6 +226,7 @@ export function toProgressPiece(row: Record<string, unknown>): ProgressPiece | n
   if ("rated_by" in row) piece.rated_by = str(row.rated_by) ?? "";
   if ("rated_at" in row) piece.rated_at = str(row.rated_at);
   if ("rating_stale" in row) piece.rating_stale = row.rating_stale === true;
+  if ("rating_ai" in row) piece.rating_ai = str(row.rating_ai) ?? "";
   return piece;
 }
 

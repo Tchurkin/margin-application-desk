@@ -13,8 +13,9 @@ const COLLEGE_NEW_COLS = ", submitted_at";
 const PIECE_COLS = "id, college_id, title, status, word_count, char_count, limit_kind, limit_value, sort, created_at";
 /** Added by migration 20260928. */
 const PIECE_NEW_COLS = ", due";
-/** Added by migration 20261025: the counselor's rating. */
+/** Added by migration 20261025: the counselor's rating; its AI note by 20261028. */
 const RATING_COLS = ", rating, rating_reason, rated_by, rated_at, rating_stale";
+const RATING_AI_COL = ", rating_ai";
 
 export interface ProgressData {
   colleges: ProgressCollege[];
@@ -36,12 +37,13 @@ export async function loadProgress(supabase: SupabaseClient, deskId: string): Pr
   const collegesQuery = (cols: string) => supabase.from("colleges").select(cols).eq("desk_id", deskId).order("name");
   const [firstColleges, rated, recs, lets] = await Promise.all([
     collegesQuery(COLLEGE_COLS + COLLEGE_NEW_COLS),
-    piecesQuery(PIECE_COLS + PIECE_NEW_COLS + RATING_COLS),
+    piecesQuery(PIECE_COLS + PIECE_NEW_COLS + RATING_COLS + RATING_AI_COL),
     supabase.from("recommenders").select("id, name, role, color, created_at").eq("desk_id", deskId).order("created_at"),
     supabase.from("letters").select("college_id, recommender_id, status").eq("desk_id", deskId),
   ]);
-  // Without ratings yet the board is otherwise current.
-  let pieces = missingColumn(rated.error) ? await piecesQuery(PIECE_COLS + PIECE_NEW_COLS) : rated;
+  // Without ratings yet (or their AI note) the board is otherwise current.
+  let pieces = missingColumn(rated.error) ? await piecesQuery(PIECE_COLS + PIECE_NEW_COLS + RATING_COLS) : rated;
+  if (missingColumn(pieces.error)) pieces = await piecesQuery(PIECE_COLS + PIECE_NEW_COLS);
   const behind = missingColumn(pieces.error);
   if (behind) pieces = await piecesQuery(PIECE_COLS);
   // Before migration 20261007 a college is submitted when every piece is (lanes.ts isSubmitted).

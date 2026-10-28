@@ -20,6 +20,8 @@ export interface Rated {
   rated_at?: string | null;
   /** Edited after it was rated. */
   rating_stale?: boolean;
+  /** What sounds AI-written, as the counselor quoted it; empty when nothing does (migration 20261028). */
+  rating_ai?: string;
 }
 
 /**
@@ -36,8 +38,9 @@ export function ratingBand(p: Rated): RatingBand | null {
 export function ratingPhrase(p: Rated, withReason: boolean): string {
   if (!ratingBand(p)) return "";
   const stale = p.rating_stale ? ", edited since" : "";
+  const ai = p.rating_ai ? ", sounds AI-written" : "";
   const reason = withReason && p.rating_reason ? `: ${p.rating_reason}` : "";
-  return ` · rated ${p.rating}${stale}${reason}`;
+  return ` · rated ${p.rating}${stale}${ai}${reason}`;
 }
 
 export type ColorBy = "stage" | "rating";
