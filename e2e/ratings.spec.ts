@@ -72,7 +72,7 @@ test("Rate my essays: ratings color the board, every college's pieces, faded onc
   // The connector shows it too.
   expect((await call(client, "read_piece", { piece_id: why })).text).toContain("Rated 72 by Claude");
   expect((await call(client, "list_my_desk")).text).toMatch(/Why Testy Tech .*rated 72 by Claude/);
-  expect((await call(client, "read_piece", { piece_id: empty })).text).not.toContain("## Rating");
+  expect((await call(client, "read_piece", { piece_id: empty })).text).not.toContain("## Last rating");
   const writing = (await call(client, "read_writing")).text;
   expect(writing).toContain("## Testy Tech");
   expect(writing).toContain("I like the rockets club and the long winters.");

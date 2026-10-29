@@ -36,7 +36,9 @@ Strategy: read_strategy shows each college's admission odds, fit, cost and the p
 
 Requests from the website: the student (and, on an essay, people they share their desk with; such a request says who asked, and you answer them without changing anything on the desk) can ask questions, ask for rewrites of a passage they highlight (answered with 2 or 3 versions, each inside <option></option> tags, which the desk shows in place of the passage) or odds estimates from inside the website, without leaving it. They wait in a queue. Interview requests come from the Profile page: each carries the student's latest answer; save what you learned, then reply with your next question. Chat requests are messages to you from the Counselor page: reply as their counselor, and do what they ask with your tools. Transcript requests carry the transcript the student pasted on their Profile page: fill in their academics from it with update_academics (never guess a grade), then reply with what you saved. When the student says to watch their desk, call watch_desk: it waits for the next request and returns it; answer it on the desk (answer_request; set_college_strategy for odds), then call watch_desk again, and keep watching until the student says to stop. Keep this chat quiet while watching (a one-line note per request). list_desk_requests shows what's waiting at any time.
 
-Start with list_my_desk to see the colleges and pieces, and read_piece before working on a piece: it has the prompt, the word or character limit, the current text, the student's notes, their research on the college, and their other essays for that college. Use what the student has written about themselves; when a draft needs a specific detail you don't have, ask or leave a clear [bracketed placeholder]. Mind the limit. Some colleges have an AI policy noted on the desk; tell the student if what they ask for would go against it.`;
+Start with list_my_desk to see the colleges and pieces, and read_piece before working on a piece: it has the prompt, the word or character limit, the current text, the student's notes, their research on the college, and their other essays for that college. Use what the student has written about themselves; when a draft needs a specific detail you don't have, ask or leave a clear [bracketed placeholder]. Mind the limit. Some colleges have an AI policy noted on the desk; tell the student if what they ask for would go against it.
+
+The student keeps editing between requests: a piece you read earlier in this conversation, or an earlier rating's reason, may be out of date. Before you say anything about a piece that isn't in front of you right now (that it repeats another, is missing, unfinished or over its limit, still has a problem you noted before), read it again (read_piece, or read_writing for many); if you can't check, don't say it.`;
 
 const TOKEN_RE = /^[A-Za-z0-9_-]{20,64}$/;
 
@@ -286,7 +288,11 @@ export function renderPiece(p: PieceInfo, body: string): string {
     body || "(empty: nothing written yet)",
   );
   if (p.rating) {
-    lines.push("", "## Rating", `${capital(ratingPhrase(p.rating))}${p.rating.reason ? `: ${p.rating.reason}` : ""}`);
+    lines.push(
+      "",
+      "## Last rating (from before any edits since: judge the text as it is now, not by this)",
+      `${capital(ratingPhrase(p.rating))}${p.rating.reason ? `: ${p.rating.reason}` : ""}`,
+    );
     if (p.rating.sounds_ai) lines.push(`Sounds AI-written: ${p.rating.sounds_ai}`);
   }
   if (p.notes) lines.push("", "## Notes from the student and the people they share with (not part of the essay)", p.notes);

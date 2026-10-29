@@ -279,7 +279,10 @@ export const HOW_TO_RATE =
   "The reason is the whole analysis, in two to four sentences the student can act on: what works (name it), what holds the piece back, and the one change that would raise it most. " +
   "Give every piece that much, however many you rate. " +
   "Repetition counts only between pieces one admissions reader sees together: those in the same college's application (its own pieces, and a personal statement or other essay sent to every college on that application, like the Common App essay to a Common App college). " +
-  "The same story or lesson in essays for different colleges is fine and expected, since no reader sees both: never lower a rating for it, and don't mention it.";
+  "The same story or lesson in essays for different colleges is fine and expected, since no reader sees both: never lower a rating for it, and don't mention it. " +
+  "Check every claim against the desk as it is now, not as you remember it: the student edits between requests, so a piece you read earlier in this conversation, or an earlier rating's reason, may be out of date. " +
+  "Before you say a piece repeats another, is missing, unfinished or over its limit, or still has a problem noted before, read the other piece's current text (read_piece shows the other pieces for the same college as they stand) and confirm it; " +
+  "if you can't confirm it, leave it out.";
 
 function rateSteps(r: PendingRequest, o: ListingOptions): string[] {
   if (r.piece_id) {

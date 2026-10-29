@@ -98,6 +98,8 @@ describe("renderRequestList", () => {
     expect(t).toContain("say so in sounds_ai: quote each line, name its tell");
     expect(t).toContain("rates 45 or lower");
     expect(t).toContain("how the student writes elsewhere on the desk");
+    expect(t).toContain("Check every claim against the desk as it is now, not as you remember it");
+    expect(t).toContain("if you can't confirm it, leave it out");
     expect(t).toContain("answer_request with request_id rt1");
   });
 
