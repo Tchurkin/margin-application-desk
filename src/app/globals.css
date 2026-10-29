@@ -316,6 +316,8 @@ body {
   outline: none;
 }
 /* Chosen in Settings > Appearance. */
+/* An essay has no links: one from before they were turned off reads as plain words. */
+.essay .ProseMirror a { color: inherit; text-decoration: none; cursor: text; }
 :root[data-essay-size="small"] .essay .ProseMirror { font-size: 0.98rem; }
 :root[data-essay-size="large"] .essay .ProseMirror { font-size: 1.22rem; }
 :root[data-essay-font="sans"] .essay .ProseMirror { font-family: var(--font-sans), system-ui, sans-serif; }

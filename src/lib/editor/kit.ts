@@ -12,6 +12,10 @@ export const ESSAY_KIT = {
   codeBlock: false,
   code: false,
   horizontalRule: false,
+  // Essays have no links. The kind stays in the schema (a document that has one still loads), but
+  // nothing typed or pasted becomes one, and clicking one does nothing: "going to.be" was turning
+  // into a link to the site to.be, and a click in the essay opened it.
+  link: { autolink: false, linkOnPaste: false, openOnClick: false },
 } as const;
 
 export const essayStarterKit = () => StarterKit.configure(ESSAY_KIT);

@@ -6,9 +6,9 @@ import CollaborationCaret from "@tiptap/extension-collaboration-caret";
 import Placeholder from "@tiptap/extension-placeholder";
 import { UndoCaret } from "@/lib/editor/undo-caret";
 import { EditorContent, useEditor, type Editor, type JSONContent } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
 import { PieceRatingPanel, ratingLabel, TEXT_SAVED, usePieceRating } from "@/components/rating/piece-rating";
 import { yUndoPluginKey } from "@tiptap/y-tiptap";
+import { essayStarterKit } from "@/lib/editor/kit";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { AnswerText, InlineText } from "@/components/ask/answer-text";
 import { FormattedTextarea } from "@/components/formatted-textarea";
@@ -746,7 +746,7 @@ function EssayEditor({
     });
     const user = channel.awareness.getLocalState()?.user as { name: string; color: string };
     return [
-      StarterKit.configure({ undoRedo: false, heading: false, codeBlock: false, code: false, horizontalRule: false }),
+      essayStarterKit(),
       Collaboration.configure({ document: sync.doc, field: "default" }),
       CollaborationCaret.configure({ provider: { awareness: channel.awareness }, user }),
       Placeholder.configure({ placeholder: mode === "owner" ? "Start writing…" : "Nothing written yet." }),
