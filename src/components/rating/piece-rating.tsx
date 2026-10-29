@@ -29,16 +29,23 @@ export interface PieceRatingState {
   rating: Rated | null;
   assistants: Assistant[];
   pending: DeskRequest | null;
+  /** Someone the desk is shared with: a rating is on its way (they can't read the queue itself). */
+  asked: boolean;
+  /** Someone the desk is shared with may ask for a rating (migration 20261029). */
+  guestCanAsk: boolean;
   reload: () => void;
   setPending: (r: DeskRequest | null) => void;
+  setAsked: (asked: boolean) => void;
 }
 
 export function usePieceRating(pieceId: string, owner: boolean): PieceRatingState {
-  const [state, setState] = useState<Omit<PieceRatingState, "reload" | "setPending">>({
+  const [state, setState] = useState<Omit<PieceRatingState, "reload" | "setPending" | "setAsked">>({
     ready: false,
     rating: null,
     assistants: [],
     pending: null,
+    asked: false,
+    guestCanAsk: false,
   });
   const [tick, setTick] = useState(0);
   const reload = useCallback(() => setTick((t) => t + 1), []);
@@ -48,7 +55,7 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
     let stopped = false;
     void (async () => {
       const none = Promise.resolve({ data: null, error: null });
-      const [piece, reqs, links] = await Promise.all([
+      const [piece, reqs, links, asked] = await Promise.all([
         // With the AI note, or without it on a database before migration 20261028.
         (async (): Promise<{ data: unknown; error: unknown }> => {
           const withAi = await supabase.from("pieces").select(RATING_COLS + RATING_AI_COL).eq("id", pieceId).maybeSingle();
@@ -65,6 +72,7 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
               .limit(1)
           : none,
         owner ? supabase.from("connector_links").select("label").is("revoked_at", null) : none,
+        owner ? none : supabase.rpc("piece_rating_pending", { piece: pieceId }),
       ]);
       if (stopped) return;
       // A database without ratings yet: nothing to show.
@@ -76,6 +84,8 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
         rating: (piece.data as Rated | null) ?? null,
         assistants: (["claude", "chatgpt"] as const).filter((a) => labels.has(a)),
         pending: rows.find((r) => r.status === "pending") ?? null,
+        asked: !owner && asked.data === true,
+        guestCanAsk: !owner && !asked.error,
       });
     })();
     return () => {
@@ -95,7 +105,7 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
   }, [fresh, pieceId, reload]);
 
   // While a rating is on its way, look again now and then (and on coming back to the tab).
-  const waiting = !!state.pending;
+  const waiting = !!state.pending || state.asked;
   useEffect(() => {
     if (!waiting) return;
     const t = setInterval(reload, POLL_MS);
@@ -106,7 +116,12 @@ export function usePieceRating(pieceId: string, owner: boolean): PieceRatingStat
     };
   }, [waiting, reload]);
 
-  return { ...state, reload, setPending: (pending) => setState((s) => ({ ...s, pending })) };
+  return {
+    ...state,
+    reload,
+    setPending: (pending) => setState((s) => ({ ...s, pending })),
+    setAsked: (asked) => setState((s) => ({ ...s, asked })),
+  };
 }
 
 /** What the Rating fold-out's button says: "Rating 72", or just "Rating". */
@@ -131,6 +146,15 @@ export function PieceRatingPanel({ state, deskId, pieceId, owner }: { state: Pie
     } finally {
       setQueuing(false);
     }
+  }
+  // Someone the desk is shared with: the student's counselor rates it, as if the student had asked.
+  async function askAsGuest() {
+    setError(null);
+    setQueuing(true);
+    const { error: e } = await supabaseBrowser().rpc("rate_on_shared_desk", { piece: pieceId });
+    setQueuing(false);
+    if (e) setError(e.message === "not allowed" ? "You can't ask for a rating on this desk." : e.message);
+    else state.setAsked(true);
   }
   async function cancel() {
     if (!state.pending) return;
@@ -218,6 +242,21 @@ export function PieceRatingPanel({ state, deskId, pieceId, owner }: { state: Pie
               Rate this piece
             </button>
             <ModelPicker value={model} onChange={setModel} />
+          </div>
+        ))}
+      {!owner &&
+        state.guestCanAsk &&
+        (state.asked || queuing ? (
+          <div role="status" className="mt-2 rounded-md border border-accent bg-accent-soft px-2.5 py-1.5">
+            <p className="font-medium">Waiting for the student&apos;s counselor to rate this piece…</p>
+            <p className="mt-0.5 text-xs">The rating shows here when it&apos;s done.</p>
+          </div>
+        ) : (
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button type="button" className="btn" onClick={() => void askAsGuest()}>
+              Rate this piece
+            </button>
+            <span className="text-xs text-muted">The student&apos;s counselor rates it, and everyone on the desk sees the rating.</span>
           </div>
         ))}
       {error && (

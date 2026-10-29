@@ -971,3 +971,57 @@ test("people who can edit switch between Editing and Suggesting, suggesters only
     await expect(dad.getByRole("radiogroup", { name: "Mode" })).toBeVisible({ timeout: 3_000 });
   }).toPass({ timeout: 20_000 });
 });
+
+test("someone who can only read asks for a piece's rating; the counselor rates it as the student's own", async ({ page, browser, request }) => {
+  await studentWith(page, "rateshare", "My essay about robots and the long winters.");
+  const pieceId = page.url().split("/").pop()!;
+  await page.goto("/desk/settings/connectors");
+  await page.getByLabel("Assistant").selectOption("Claude");
+  await page.getByRole("button", { name: "Make a connector link" }).click();
+  const link = await page.getByRole("textbox", { name: "Connector link" }).inputValue();
+  const token = link.split("/api/mcp/")[1];
+  const api = apiClient();
+  const checkIn = async () => {
+    const { data, error } = await api.rpc("connector_counselor_poll", { token, version: "6", computer: "TESTY-PC", machine: "e2e-rateshare" });
+    if (error) throw new Error(error.message);
+    return data as { fresh: number };
+  };
+
+  const grandpa = await join(browser, await makeLink(page, { role: "view", label: "Grandpa" }), "Grandpa");
+  await openShared(grandpa, "Shared essay");
+  await grandpa.getByRole("button", { name: /^Rating/ }).click();
+  const panel = grandpa.getByTestId("piece-rating");
+  await expect(panel).toContainText("Not rated yet.");
+
+  // With the counselor off, asking says so.
+  await panel.getByRole("button", { name: "Rate this piece" }).click();
+  await expect(panel.getByRole("alert")).toContainText("counselor isn't on right now");
+
+  // On: he asks, and the counselor gets it as the student's own request, with its tools.
+  await checkIn();
+  await panel.getByRole("button", { name: "Rate this piece" }).click();
+  await expect(panel.getByRole("status")).toContainText("Waiting for the student's counselor to rate this piece");
+  await expect.poll(async () => (await checkIn()).fresh).toBe(1);
+  const work = (await (await request.get(`/api/counselor/${token}`)).json()) as { requests: { id: string; text: string; guest?: boolean }[] };
+  expect(work.requests).toHaveLength(1);
+  expect(work.requests[0].guest).toBeFalsy();
+  expect(work.requests[0].text).toContain("rate this one piece, and only this one");
+  expect(work.requests[0].text).toContain(`[piece_id: ${pieceId}]`);
+
+  const client = new Client({ name: "e2e", version: "1.0.0" });
+  await client.connect(new StreamableHTTPClientTransport(new URL(link)));
+  const rated = (await client.callTool({
+    name: "set_piece_ratings",
+    arguments: { ratings: [{ piece_id: pieceId, percentile: 70, reason: "A real detail in the winters; the robots line is generic." }] },
+  })) as { isError?: boolean };
+  expect(rated.isError).toBeFalsy();
+  await client.close();
+  expect((await api.rpc("connector_finish_request", { token, request: work.requests[0].id, answer_text: "Rated 70." })).data).toBe(true);
+
+  // He sees it once it's in, and the student does too.
+  await expect(panel).toContainText("70th percentile", { timeout: 15_000 });
+  await expect(panel.getByRole("button", { name: "Rate this piece" })).toBeVisible();
+  await page.goto(`/desk/piece/${pieceId}`);
+  await page.getByRole("button", { name: /^Rating 70/ }).click();
+  await expect(page.getByTestId("piece-rating")).toContainText("A real detail in the winters");
+});

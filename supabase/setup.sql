@@ -17,7 +17,7 @@ create table if not exists average_app.migrations (version text primary key, nam
 
 do $setup$
 declare
-  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names', '20261024000000_connector_comments', '20261025000000_piece_ratings', '20261026000000_rating_stale_column', '20261027000000_rating_reason_longer', '20261028000000_rating_sounds_ai'];
+  names text[] := array['20260923000000_init', '20260924000000_sharing', '20260925000000_connectors', '20260926000000_connector_editing', '20260927000000_connector_manage', '20260928000000_strategy_progress_bridge', '20260929000000_watch_desk', '20260930000000_editing_mode', '20261001000000_permissions_counselor_profile', '20261002000000_counselor_page', '20261003000000_counselor_update', '20261004000000_models', '20261005000000_recommenders', '20261006000000_transcript', '20261007000000_submitted', '20261008000000_trash', '20261009000000_sign_in', '20261010000000_share_password', '20261011000000_password_drop_waits_for_codes', '20261012000000_average_app_name', '20261013000000_share_by_name', '20261014000000_share_join_limits', '20261015000000_profile_files', '20261016000000_desk_presence', '20261017000000_counselor_computers', '20261018000000_counselor_computers_fixes', '20261019000000_shared_ask', '20261020000000_shared_ask_fixes', '20261021000000_shared_notes', '20261022000000_comments', '20261023000000_version_names', '20261024000000_connector_comments', '20261025000000_piece_ratings', '20261026000000_rating_stale_column', '20261027000000_rating_reason_longer', '20261028000000_rating_sounds_ai', '20261029000000_shared_rate_piece'];
   marked text[];
   cli text[] := '{}';
   have boolean[];
@@ -67,7 +67,8 @@ begin
     ('20261025000000' = any(marked)) or ('20261025000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'connector_set_piece_ratings')),
     ('20261026000000' = any(marked)) or ('20261026000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'pieces_rating_stale')),
     ('20261027000000' = any(marked)) or ('20261027000000' = any(cli)) or (coalesce(position('2000' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'pieces_rating_reason_check' and c.conrelid = to_regclass('public.pieces')))) > 0, false)),
-    ('20261028000000' = any(marked)) or ('20261028000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'pieces' and column_name = 'rating_ai'))
+    ('20261028000000' = any(marked)) or ('20261028000000' = any(cli)) or (exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'pieces' and column_name = 'rating_ai')),
+    ('20261029000000' = any(marked)) or ('20261029000000' = any(cli)) or (exists (select 1 from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.proname = 'rate_on_shared_desk'))
   ];
 
   for i in 1 .. array_length(names, 1) loop
@@ -4556,6 +4557,58 @@ $m20261028000000$;
     insert into average_app.migrations (version, name) values ('20261028000000', '20261028000000_rating_sounds_ai');
     applied := applied + 1;
     raise notice 'Applied %', '20261028000000_rating_sounds_ai' || case when late[36] then ' (it had been skipped)' else '' end;
+  end if;
+
+  if not have[37] then
+    execute $m20261029000000$
+-- People a desk is shared with can ask for a piece's rating.
+--
+-- Braxton's call (10/28/26): anyone the student shares with, viewers included, can press Rate this
+-- piece. The request is the student's own kind (no guest's words in it: its text is fixed here), so
+-- the counselor rates it with its tools as if the student had asked; the rating shows for everyone.
+
+-- Ask for a rating of one piece, as someone the desk is shared with. Returns when it was asked.
+create or replace function public.rate_on_shared_desk(piece uuid)
+returns timestamptz language plpgsql security definer set search_path = public as $$
+declare
+  d uuid := public.piece_desk(piece);
+  waiting timestamptz;
+  made timestamptz;
+begin
+  if d is null or auth.uid() is null or not public.can_read_desk(d) then raise exception 'not allowed'; end if;
+  if not public.desk_counselor_on(d) then
+    raise exception 'The student''s counselor isn''t on right now, so nobody would rate it. Try again once their computer is on.';
+  end if;
+  perform pg_advisory_xact_lock(hashtext('rate_on_shared_desk'), hashtext(d::text));
+  -- One at a time per piece: a second press waits on the first.
+  select created_at into waiting from public.desk_requests
+   where piece_id = piece and kind = 'rate' and status = 'pending' order by created_at desc limit 1;
+  if waiting is not null then return waiting; end if;
+  if (select count(*) from public.desk_requests where desk_id = d and kind = 'rate' and piece_id is not null
+        and created_at > now() - interval '1 hour') >= 30 then
+    raise exception 'That''s 30 ratings asked for on this desk this hour. Try again a little later.';
+  end if;
+  insert into public.desk_requests (desk_id, piece_id, kind, prompt)
+  values (d, piece, 'rate', 'Rate this piece.')
+  returning created_at into made;
+  return made;
+end;
+$$;
+revoke all on function public.rate_on_shared_desk(uuid) from public, anon;
+grant execute on function public.rate_on_shared_desk(uuid) to authenticated;
+
+-- Whether a rating of this piece is on its way (the people it's shared with can't read the queue).
+create or replace function public.piece_rating_pending(piece uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select public.can_read_desk(public.piece_desk(piece)) and exists (
+    select 1 from public.desk_requests r where r.piece_id = piece and r.kind = 'rate' and r.status = 'pending');
+$$;
+revoke all on function public.piece_rating_pending(uuid) from public, anon;
+grant execute on function public.piece_rating_pending(uuid) to authenticated;
+$m20261029000000$;
+    insert into average_app.migrations (version, name) values ('20261029000000', '20261029000000_shared_rate_piece');
+    applied := applied + 1;
+    raise notice 'Applied %', '20261029000000_shared_rate_piece' || case when late[37] then ' (it had been skipped)' else '' end;
   end if;
 
   if applied = 0 then

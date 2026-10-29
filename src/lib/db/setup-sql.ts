@@ -54,6 +54,7 @@ export const PROBES: Record<string, string> = {
   "20261025000000": fn("connector_set_piece_ratings"),
   "20261026000000": fn("pieces_rating_stale"),
   "20261028000000": col("pieces", "rating_ai"),
+  "20261029000000": fn("rate_on_shared_desk"),
   "20261027000000": `coalesce(position('2000' in pg_get_constraintdef((select c.oid from pg_constraint c where c.conname = 'pieces_rating_reason_check' and c.conrelid = to_regclass('public.pieces')))) > 0, false)`,
 };
 
